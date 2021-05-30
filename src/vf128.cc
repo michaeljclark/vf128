@@ -814,17 +814,11 @@ int vf8_f64_read(vf8_buf *buf, double *value)
     }
     else {
         size_t lz = clz(vr_man);
-        if (vf_exp == 0) {
-            /* if exponent is zero, the mantissa contains an integer
-             * add its width to the exponent and truncate the leading 1 */
-            vp_exp = f64_exp_bias + 63 - lz;
-            vp_man = (u64)vr_man << (lz + 1) >> (f64_exp_size + 1);
-        }
-        else {
-            /* left-justify the mantissa and truncate the leading 1 */
-            vp_exp = f64_exp_bias + vr_exp;
-            vp_man = (u64)vr_man << (lz + 1) >> (f64_exp_size + 1);
-        }
+        /* if the exponent is not present, the mantissa holds an integer
+         * so we calculate the exponent based on the leading zero count */
+        vp_exp = f64_exp_bias + (vf_exp == 0 ? 63 - lz : vr_exp);
+        /* left-justify the mantissa and truncate the leading 1 */
+        vp_man = (u64)vr_man << (lz + 1) >> (f64_exp_size + 1);
     }
 
     v = f64_pack_float(f64_struct{vp_man, (u64)vp_exp, vf_sgn});
