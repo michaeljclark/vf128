@@ -13,6 +13,12 @@
 
 #define DEBUG_ENCODING 0
 
+#if defined(__i386__) || defined(__x86_64__) || defined(_M_IX86) || defined(_M_X64) || defined(_M_AMD64)
+#ifndef USE_UNALIGNED_ACCESSES
+#define USE_UNALIGNED_ACCESSES 1
+#endif
+#endif
+
 /*
  * buffer implementation
  */
@@ -231,13 +237,19 @@ int vf8_le_ber_integer_u64_read(vf8_buf *buf, size_t len, u64 *value)
     if (len > 8) {
         goto err;
     }
+
+#if USE_UNALIGNED_ACCESSES
+    if (vf8_buf_read_bytes(buf, (char*)value, len) != len) {
+        goto err;
+    }
+#else
     if (vf8_buf_read_bytes(buf, (char*)&o, len) != len) {
         goto err;
     }
 
-    v = le64(o);
+    *value = le64(o);
+#endif
 
-    *value = v;
     return 0;
 err:
     *value = 0;
@@ -252,11 +264,17 @@ int vf8_le_ber_integer_u64_write(vf8_buf *buf, size_t len, const u64 *value)
         goto err;
     }
 
+#if USE_UNALIGNED_ACCESSES
+    if (vf8_buf_write_bytes(buf, (const char*)value, len) != len) {
+        goto err;
+    }
+#else
     o = le64(*value);
 
     if (vf8_buf_write_bytes(buf, (const char*)&o, len) != len) {
         goto err;
     }
+#endif
 
     return 0;
 err:
