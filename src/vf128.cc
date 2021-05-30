@@ -239,6 +239,7 @@ int vf8_le_ber_integer_u64_read(vf8_buf *buf, size_t len, u64 *value)
     }
 
 #if USE_UNALIGNED_ACCESSES
+    /* unaligned accesses are enabled on little-endian targets */
     if (vf8_buf_read_bytes(buf, (char*)value, len) != len) {
         goto err;
     }
@@ -265,6 +266,7 @@ int vf8_le_ber_integer_u64_write(vf8_buf *buf, size_t len, const u64 *value)
     }
 
 #if USE_UNALIGNED_ACCESSES
+    /* unaligned accesses are enabled on little-endian targets */
     if (vf8_buf_write_bytes(buf, (const char*)value, len) != len) {
         goto err;
     }
