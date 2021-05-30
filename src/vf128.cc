@@ -11,6 +11,8 @@
 #include "stdbits.h"
 #include "stdendian.h"
 
+#define DEBUG_ENCODING 0
+
 /*
  * buffer implementation
  */
@@ -728,17 +730,43 @@ static vf8_f64_data vf8_f64_data_get(double value)
     return vf8_f64_data { sign, sexp, frac };
 }
 
+#if DEBUG_ENCODING
+static void _vf8_debug_pack(double v, u8 pre, s64 vp_exp, u64 vp_man, s64 vd_exp, u64 vd_man)
+{
+    bool vf_inl = (pre >> 7) & 1;
+    bool vf_sgn = (pre >> 6) & 1;
+    int vf_exp = (pre >> 4) & 3;
+    int vf_man = pre & 15;
+
+    printf("\n%16s %20s -> %18s %5s -> %1s %1s %2s %4s %4s\n",
+        "value (dec)", "value (hex)", "fraction", "exp",
+        "i", "s", "ex", "mant", "len");
+    printf("%16f %20a    0x%016llx %05lld    %1u %1u %2s %4s",
+        v, v, vp_man, vp_exp, vf_inl, vf_sgn,
+        _to_binary_text(vf_exp, 1, 0).c_str(),
+        _to_binary_text(vf_man, 3, 0).c_str());
+
+    printf(" [%02d] { pre=0x%02hhx", 1 + (vf_inl ? 0 : vf_exp + vf_man), pre);
+    if (!vf_inl && vf_man) {
+        printf(" man=0x%02llx", vd_man);
+    }
+    if (!vf_inl && vf_exp) {
+        printf(" exp=%lld", vd_exp);
+    }
+    printf(" }\n");
+}
+#endif
+
 int vf8_f64_read(vf8_buf *buf, double *value)
 {
     s8 pre;
-    u8 len;
 	double v = 0;
     bool vf_inl;
     bool vf_sgn;
     int vf_exp;
     int vf_man;
-    u64 vr_man;
-    s64 vr_exp;
+    u64 vr_man = 0;
+    s64 vr_exp = 0;
     u64 vp_man = 0;
     s64 vp_exp = 0;
 
@@ -752,15 +780,11 @@ int vf8_f64_read(vf8_buf *buf, double *value)
     vf_man = pre & 15;
 
     if (!vf_inl) {
-        if (vf_exp) {
-            if (vf8_le_ber_integer_s64_read(buf, vf_exp, &vr_exp) < 0) {
-                goto err;
-            }
+        if (vf_exp && vf8_le_ber_integer_s64_read(buf, vf_exp, &vr_exp) < 0) {
+            goto err;
         }
-        if (vf_man) {
-            if (vf8_le_ber_integer_u64_read(buf, vf_man, &vr_man) < 0) {
-                goto err;
-            }
+        if (vf_man && vf8_le_ber_integer_u64_read(buf, vf_man, &vr_man) < 0) {
+            goto err;
         }
     }
 
@@ -781,9 +805,6 @@ int vf8_f64_read(vf8_buf *buf, double *value)
         }
     }
     else {
-        /*
-         * TODO - consider omitting leading 1 and adjusting exponent
-         */
         size_t lz = clz(vr_man);
         if (vf_exp == 0) {
             /* if exponent is zero, the mantissa contains an integer
@@ -801,20 +822,8 @@ int vf8_f64_read(vf8_buf *buf, double *value)
     v = f64_pack_float(f64_struct{vp_man, (u64)vp_exp, vf_sgn});
     *value = v;
 
-#if 1
-    printf("\n%16s %20s -> %18s %5s -> %1s %1s %2s %4s %4s\n",
-        "value (dec)", "value (hex)", "fraction", "exp",
-        "i", "s", "ex", "mant", "len");
-    printf("%16f %20a    0x%016llx %05lld    %1u %1u %2s %4s",
-        v, v, vp_man << 12, vp_exp - f64_exp_bias, vf_inl, vf_sgn,
-        _to_binary_text(vf_exp, 1, 0).c_str(),
-        _to_binary_text(vf_man, 3, 0).c_str());
-    printf(" [%02d] { pre=0x%02hhx", 1 + (vf_inl ? 0 : vf_exp + vf_man), pre);
-    if (!vf_inl && vf_man)
-        printf(" man=0x%02llx", vr_man);
-    if (!vf_inl && vf_exp)
-        printf(" exp=%lld", vr_exp);
-    printf(" }\n");
+#if DEBUG_ENCODING
+    _vf8_debug_pack(v, pre, vp_exp - f64_exp_bias, vp_man << 12, vr_exp, vr_man);
 #endif
 
     return 0;
@@ -823,10 +832,14 @@ err:
     return -1;
 }
 
+enum : u64 {
+    u64_msb = 0x8000000000000000ull,
+    u64_msn = 0xf000000000000000ull
+};
+
 int vf8_f64_write(vf8_buf *buf, const double *value)
 {
     s8 pre;
-    u8 len;
     double v = *value;
 	vf8_f64_data d = vf8_f64_data_get(v);
     bool vf_inl = 0;
@@ -857,16 +870,18 @@ int vf8_f64_write(vf8_buf *buf, const double *value)
         }
     }
     // Inline (normal)
-    else if (d.sexp <= 1 && d.sexp >= 0 && (d.frac & 0xf000000000000000ull) == d.frac) {
+    else if (d.sexp <= 1 && d.sexp >= 0 &&
+             (d.frac & u64_msn) == d.frac) {
         vf_inl = 1;
         vf_exp = d.sexp + 1;
         vf_man = d.frac >> 60;
     }
     // Inline (subnormal)
-    else if (d.sexp <= -1 && d.sexp >= -4 && ((d.frac >> -d.sexp) & 0xf000000000000000ull) == (d.frac >> -d.sexp)) {
+    else if (d.sexp <= -1 && d.sexp >= -4 &&
+             ((d.frac >> -d.sexp) & u64_msn) == (d.frac >> -d.sexp)) {
         vf_inl = 1;
         vf_exp = 0;
-        vf_man = ((0x8000000000000000ull >> (-d.sexp-1)) | (d.frac >> -d.sexp)) >> 60;
+        vf_man = (0x10 | (d.frac >> 60)) >> -d.sexp;
     }
     // Normal Out-of-line
     else { normal:
@@ -874,14 +889,12 @@ int vf8_f64_write(vf8_buf *buf, const double *value)
         /*
          * 1. omit fraction for powers of two (fraction is zero).
          * 2. omit exponent for integers (no fraction bits right of point).
-         * 3. otherwise encode exponent and fraction
-         *
-         * TODO - consider omitting leading 1 and adjusting exponent
+         * 3. otherwise encode both exponent and fraction
          */
         if (d.sexp >= 0 && d.sexp < 64 && d.frac > 0 && (d.frac << d.sexp) == 0) {
             size_t sh = 64 - d.sexp;
             vf_exp = 0;
-            vw_man = (d.frac >> sh) | (0x8000000000000000ull >> (sh - 1));
+            vw_man = (d.frac >> sh) | (u64_msb >> (sh - 1));
             vf_man = vf8_le_ber_integer_u64_length(&vw_man);
         }
         else if (d.frac == 0) {
@@ -891,7 +904,7 @@ int vf8_f64_write(vf8_buf *buf, const double *value)
         }
         else {
             size_t sh = ctz(d.frac);
-            vw_man = (d.frac >> sh) | (0x8000000000000000ull >> (sh - 1));
+            vw_man = (d.frac >> sh) | (u64_msb >> (sh - 1));
             vw_exp = d.sexp;
             vf_exp = vf8_le_ber_integer_s64_length(&vw_exp);
             vf_man = vf8_le_ber_integer_u64_length(&vw_man);
@@ -905,32 +918,16 @@ int vf8_f64_write(vf8_buf *buf, const double *value)
     }
 
     if (!vf_inl) {
-        if (vf_exp) {
-            if (vf8_le_ber_integer_s64_write(buf, vf_exp, &vw_exp) < 0) {
-                goto err;
-            }
+        if (vf_exp && vf8_le_ber_integer_s64_write(buf, vf_exp, &vw_exp) < 0) {
+            goto err;
         }
-        if (vf_man) {
-            if (vf8_le_ber_integer_u64_write(buf, vf_man, &vw_man) < 0) {
-                goto err;
-            }
+        if (vf_man && vf8_le_ber_integer_u64_write(buf, vf_man, &vw_man) < 0) {
+            goto err;
         }
     }
 
-#if 1
-    printf("\n%16s %20s -> %18s %5s -> %1s %1s %2s %4s %4s\n",
-        "value (dec)", "value (hex)", "fraction", "exp",
-        "i", "s", "ex", "mant", "len");
-    printf("%16f %20a    0x%016llx %05lld    %1u %1u %2s %4s",
-        v, v, d.frac, d.sexp, vf_inl, vf_sgn,
-        _to_binary_text(vf_exp, 1, 0).c_str(),
-        _to_binary_text(vf_man, 3, 0).c_str());
-    printf(" [%02d] { pre=0x%02hhx", 1 + (vf_inl ? 0 : vf_exp + vf_man), pre);
-    if (!vf_inl && vf_man)
-        printf(" man=0x%02llx", vw_man);
-    if (!vf_inl && vf_exp)
-        printf(" exp=%lld", vw_exp);
-    printf(" }\n");
+#if DEBUG_ENCODING
+    _vf8_debug_pack(v, pre, d.sexp, d.frac, vw_exp, vw_man);
 #endif
 
     return 0;
