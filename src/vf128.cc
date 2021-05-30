@@ -17,12 +17,6 @@
  * buffer implementation
  */
 
-static bool _debug_enabled = false;
-
-#define _debug(...) if (_debug_enabled) { printf(__VA_ARGS__); }
-#define _debug_func(fmt,...) \
-if (_debug_enabled) { printf("%s: " fmt, __func__, __VA_ARGS__); }
-
 vf8_buf* vf8_buf_new(size_t size)
 {
     vf8_buf *buf = (vf8_buf*)malloc(sizeof(vf8_buf));
@@ -128,8 +122,6 @@ static size_t vf8_buf_write_int(vf8_buf *buf, INT num, SWAP f)
     if (buf->data_offset + sizeof(num) > buf->data_size) return 0;
     INT t = f(num);
     memcpy(buf->data + buf->data_offset, &t, sizeof(INT));
-    _debug_func("bits=%zu, offset=%zu, value=%lld\n",
-                sizeof(num)<<3, buf->data_offset, (long long)num);
     buf->data_offset += sizeof(num);
     return sizeof(num);
 }
@@ -141,8 +133,6 @@ static size_t vf8_buf_read_int(vf8_buf *buf, INT *num, SWAP f)
     INT t;
     memcpy(&t, buf->data + buf->data_offset, sizeof(INT));
     *num = f(t);
-    _debug_func("bits=%zu, offset=%zu, value=%lld\n",
-                sizeof(num)<<3, buf->data_offset, (long long)*num);
     buf->data_offset += sizeof(*num);
     return sizeof(*num);
 }
@@ -151,7 +141,6 @@ size_t vf8_buf_write_bytes(vf8_buf* buf, const char *s, size_t len)
 {
     if (buf->data_offset + len > buf->data_size) return 0;
     memcpy(&buf->data[buf->data_offset], s, len);
-    _debug_func("length=%zu, offset=%zu\n", len, buf->data_offset);
     buf->data_offset += len;
     return len;
 }
@@ -160,7 +149,6 @@ size_t vf8_buf_read_bytes(vf8_buf* buf, char *s, size_t len)
 {
     if (buf->data_offset + len > buf->data_size) return 0;
     memcpy(s, &buf->data[buf->data_offset], len);
-    _debug_func("length=%" PRIu64 ", offset=%zu\n", len, buf->data_offset);
     buf->data_offset += len;
     return len;
 }
