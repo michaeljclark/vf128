@@ -19,6 +19,9 @@ include_directories(src)
 
 add_library(vf8 STATIC src/vf128.cc)
 
+add_executable(bench_io test/bench_io.cc)
+target_link_libraries(bench_io vf8)
+
 enable_testing()
 
 foreach(prog IN ITEMS t1)

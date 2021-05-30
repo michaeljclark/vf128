@@ -213,28 +213,126 @@ double _f64_snan();
  * integer and floating-point serialization
  */
 
+typedef enum {
+    asn1_class_universal        = 0b00,
+    asn1_class_application      = 0b01,
+    asn1_class_context_specific = 0b10,
+    asn1_class_private          = 0b11
+} asn1_class;
+
+typedef enum {
+    asn1_tag_reserved           = 0,
+    asn1_tag_boolean            = 1,
+    asn1_tag_integer            = 2,
+    asn1_tag_bit_string         = 3,
+    asn1_tag_octet_string       = 4,
+    asn1_tag_null               = 5,
+    asn1_tag_object_identifier  = 6,
+    asn1_tag_object_descriptor  = 7,
+    asn1_tag_external           = 8,
+    asn1_tag_real               = 9,
+} asn1_tag;
+
+struct asn1_id
+{
+    u64 _identifier  : 56;
+    u64 _constructed : 1;
+    u64 _class       : 2;
+};
+typedef struct asn1_id asn1_id;
+
+struct asn1_hdr
+{
+    asn1_id _id;
+    u64 _length;
+};
+typedef struct asn1_hdr asn1_hdr;
+
+struct f64_result { f64 value; s64 error; };
+struct s64_result { s64 value; s64 error; };
+struct u64_result { u64 value; s64 error; };
+
+size_t vf8_asn1_ber_tag_length(u64 len);
+int vf8_asn1_ber_tag_read(vf8_buf *buf, u64 *len);
+int vf8_asn1_ber_tag_write(vf8_buf *buf, u64 len);
+
+size_t vf8_asn1_ber_ident_length(asn1_id _id);
+int vf8_asn1_ber_ident_read(vf8_buf *buf, asn1_id *_id);
+int vf8_asn1_ber_ident_write(vf8_buf *buf, asn1_id _id);
+
+size_t vf8_asn1_ber_length_length(u64 length);
+int vf8_asn1_ber_length_read(vf8_buf *buf, u64 *length);
+int vf8_asn1_ber_length_write(vf8_buf *buf, u64 length);
+
 size_t vf8_asn1_ber_integer_u64_length(const u64 *value);
 int vf8_asn1_ber_integer_u64_read(vf8_buf *buf, size_t len, u64 *value);
 int vf8_asn1_ber_integer_u64_write(vf8_buf *buf, size_t len, const u64 *value);
+int vf8_asn1_der_integer_u64_read(vf8_buf *buf, asn1_tag _tag, u64 *value);
+int vf8_asn1_der_integer_u64_write(vf8_buf *buf, asn1_tag _tag, const u64 *value);
+
+size_t vf8_asn1_ber_integer_u64_length_byval(const u64 value);
+struct u64_result vf8_asn1_ber_integer_u64_read_byval(vf8_buf *buf, size_t len);
+int vf8_asn1_ber_integer_u64_write_byval(vf8_buf *buf, size_t len, const u64 value);
+struct u64_result vf8_asn1_der_integer_u64_read_byval(vf8_buf *buf, asn1_tag _tag);
+int vf8_asn1_der_integer_u64_write_byval(vf8_buf *buf, asn1_tag _tag, const u64 value);
 
 size_t vf8_asn1_ber_integer_s64_length(const s64 *value);
 int vf8_asn1_ber_integer_s64_read(vf8_buf *buf, size_t len, s64 *value);
 int vf8_asn1_ber_integer_s64_write(vf8_buf *buf, size_t len, const s64 *value);
+int vf8_asn1_der_integer_s64_read(vf8_buf *buf, asn1_tag _tag, s64 *value);
+int vf8_asn1_der_integer_s64_write(vf8_buf *buf, asn1_tag _tag, const s64 *value);
+
+size_t vf8_asn1_ber_integer_s64_length_byval(const s64 value);
+struct s64_result vf8_asn1_ber_integer_s64_read_byval(vf8_buf *buf, size_t len);
+int vf8_asn1_ber_integer_s64_write_byval(vf8_buf *buf, size_t len, const s64 value);
+struct s64_result vf8_asn1_der_integer_s64_read_byval(vf8_buf *buf, asn1_tag _tag);
+int vf8_asn1_der_integer_s64_write_byval(vf8_buf *buf, asn1_tag _tag, const s64 value);
 
 size_t vf8_le_ber_integer_u64_length(const u64 *value);
 int vf8_le_ber_integer_u64_read(vf8_buf *buf, size_t len, u64 *value);
 int vf8_le_ber_integer_u64_write(vf8_buf *buf, size_t len, const u64 *value);
 
+size_t vf8_le_ber_integer_u64_length_byval(const u64 value);
+struct u64_result vf8_le_ber_integer_u64_read_byval(vf8_buf *buf, size_t len);
+int vf8_le_ber_integer_u64_write_byval(vf8_buf *buf, size_t len, const u64 value);
+
 size_t vf8_le_ber_integer_s64_length(const s64 *value);
 int vf8_le_ber_integer_s64_read(vf8_buf *buf, size_t len, s64 *value);
 int vf8_le_ber_integer_s64_write(vf8_buf *buf, size_t len, const s64 *value);
 
+size_t vf8_le_ber_integer_s64_length_byval(const s64 *value);
+struct s64_result vf8_le_ber_integer_s64_read_byval(vf8_buf *buf, size_t len);
+int vf8_le_ber_integer_s64_write_byval(vf8_buf *buf, size_t len, const s64 value);
+
 size_t vf8_asn1_ber_real_f64_length(const double *value);
 int vf8_asn1_ber_real_f64_read(vf8_buf *buf, size_t len, double *value);
 int vf8_asn1_ber_real_f64_write(vf8_buf *buf, size_t len, const double *value);
+int vf8_asn1_der_real_f64_read(vf8_buf *buf, asn1_tag _tag, double *value);
+int vf8_asn1_der_real_f64_write(vf8_buf *buf, asn1_tag _tag, const double *value);
+
+size_t vf8_asn1_ber_real_f64_length_byval(const double value);
+struct f64_result vf8_asn1_ber_real_f64_read_byval(vf8_buf *buf, size_t len);
+int vf8_asn1_ber_real_f64_write_byval(vf8_buf *buf, size_t len, const double value);
+struct f64_result vf8_asn1_der_real_f64_read_byval(vf8_buf *buf, asn1_tag _tag);
+int vf8_asn1_der_real_f64_write_byval(vf8_buf *buf, asn1_tag _tag, const double value);
 
 int vf8_f64_read(vf8_buf *buf, double *value);
 int vf8_f64_write(vf8_buf *buf, const double *value);
+
+struct f64_result vf8_f64_read_byval(vf8_buf *buf);
+int vf8_f64_write_byval(vf8_buf *buf, const double value);
+
+int leb_u64_read(vf8_buf *buf, u64 *value);
+int leb_u64_write(vf8_buf *buf, const u64 *value);
+
+struct u64_result leb_u64_read_byval(vf8_buf *buf);
+int leb_u64_write_byval(vf8_buf *buf, const u64 value);
+
+int vlu_u64_read(vf8_buf *buf, u64 *value);
+int vlu_u64_write(vf8_buf *buf, const u64 *value);
+
+struct u64_result vlu_u64_read_byval(vf8_buf *buf);
+int vlu_u64_write_byval(vf8_buf *buf, const u64 value);
 
 #ifdef __cplusplus
 }
