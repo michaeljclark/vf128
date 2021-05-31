@@ -798,9 +798,13 @@ int vf8_f64_read(vf8_buf *buf, double *value)
 
     if (vf_inl) {
         if (vf_exp == 0) {
+            /* normalize inline subnormal */
             if (vf_man > 0) {
                 size_t lz = clz((u64)vf_man);
+                /* calculate the exponent based on the leading zero count
+                 * with 4 digits right of the point hence 59 = (63 - 4) */
                 vp_exp = f64_exp_bias + 59 - lz;
+                /* left-justify the mantissa and truncate the leading 1 */
                 vp_man = ((u64)vf_man << (lz + 1)) >> (f64_exp_size + 1);
             } else {
                 vp_exp = 0;
@@ -808,7 +812,10 @@ int vf8_f64_read(vf8_buf *buf, double *value)
             }
         }
         else {
+            /* adjust exponent bias from 2-bit domain to IEEE 754 DP.
+             * bias in the 2-bit exponent is 1 and infinity is 3 */
             vp_exp = vf_exp == 3 ? f64_exp_mask : f64_exp_bias + vf_exp - 1;
+            /* left-justify the mantissa */
             vp_man = (u64)vf_man << (f64_mant_size - 4);
         }
     }
