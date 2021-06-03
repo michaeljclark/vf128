@@ -1648,7 +1648,7 @@ u64_result leb_u64_read_byval(vf8_buf *buf)
 int leb_u64_write(vf8_buf *buf, const u64 *value)
 {
     size_t len, i;
-    const u64 x = *value;
+    u64 x = *value;
     u64 v = 0;
 
     if (x >= (1ull << 56)) {
@@ -1656,12 +1656,16 @@ int leb_u64_write(vf8_buf *buf, const u64 *value)
     }
 
     len = (x == 0) ? 1 : 8 - ((clz(x) - 1) / 7) + 1;
-    for (i = 0; i < len - 1; i++) {
-        v |= (((x >> (i*7)) & 0x7f) | 0x80) << (i*8);
+    if (vf8_buf_check_capacity(buf, len) < 0) {
+        return -1;
     }
-    v |= ((x >> (i*7)) & 0x7f) << (i*8);
-
-    if (vf8_le_ber_integer_u64_write(buf, len, &v) < 0) {
+    for (i = 0; i < len - 1; i++) {
+        if (vf8_buf_write_unchecked_i8(buf, ((x & 0x7f) | 0x80)) != 1) {
+            return -1;
+        }
+        x >>= 7;
+    }
+    if (vf8_buf_write_unchecked_i8(buf, (x & 0x7f)) != 1) {
         return -1;
     }
 
@@ -1671,7 +1675,7 @@ int leb_u64_write(vf8_buf *buf, const u64 *value)
 int leb_u64_write_byval(vf8_buf *buf, const u64 value)
 {
     size_t len, i;
-    const u64 x = value;
+    u64 x = value;
     u64 v = 0;
 
     if (x >= (1ull << 56)) {
@@ -1679,12 +1683,16 @@ int leb_u64_write_byval(vf8_buf *buf, const u64 value)
     }
 
     len = (x == 0) ? 1 : 8 - ((clz(x) - 1) / 7) + 1;
-    for (i = 0; i < len - 1; i++) {
-        v |= (((x >> (i*7)) & 0x7f) | 0x80) << (i*8);
+    if (vf8_buf_check_capacity(buf, len) < 0) {
+        return -1;
     }
-    v |= ((x >> (i*7)) & 0x7f) << (i*8);
-
-    if (vf8_le_ber_integer_u64_write_byval(buf, len, v) < 0) {
+    for (i = 0; i < len - 1; i++) {
+        if (vf8_buf_write_unchecked_i8(buf, ((x & 0x7f) | 0x80)) != 1) {
+            return -1;
+        }
+        x >>= 7;
+    }
+    if (vf8_buf_write_unchecked_i8(buf, (x & 0x7f)) != 1) {
         return -1;
     }
 
