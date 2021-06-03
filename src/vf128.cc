@@ -41,45 +41,6 @@ void vf8_buf_destroy(vf8_buf* buf)
     free(buf);
 }
 
-void vf8_buf_reset(vf8_buf* buf)
-{
-    buf->data_offset = 0;
-}
-
-void vf8_buf_seek(vf8_buf* buf, size_t offset)
-{
-    buf->data_offset = offset;
-}
-
-char* vf8_buf_data(vf8_buf *buf)
-{
-    return buf->data;
-}
-
-size_t vf8_buf_offset(vf8_buf* buf)
-{
-    return buf->data_offset;
-}
-
-static std::string _to_binary_block(uint64_t symbol, size_t bit_width)
-{
-    static const char* arr[] = { "▄", "▟", "▙", "█" };
-    std::string s;
-    for (intptr_t i = bit_width-2; i >= 0; i-=2) {
-        s.append(arr[(symbol>>i) & 3]);
-    }
-    return s;
-}
-
-static std::string _to_binary_text(uint64_t symbol, intptr_t b, intptr_t e)
-{
-    std::string s;
-    for (intptr_t i = b; i >= e; i--) {
-        s.append(1, '0' + ((symbol>>i) & 1));
-    }
-    return s;
-}
-
 void vf8_buf_dump(vf8_buf *buf)
 {
     intptr_t stride = 16;
@@ -89,74 +50,20 @@ void vf8_buf_dump(vf8_buf *buf)
             if (j >= buf->data_offset) printf("     ");
             else printf(" 0x%02hhX", buf->data[j]);
         }
-        printf("\n");
-        printf("%04zX: ", i & 0xffff);
+        printf("\n%04zX: ", i & 0xffff);
         for (intptr_t j = i+stride-1; j >= i; j--) {
-            if (j >= buf->data_offset) printf(" ░░░░");
-            else printf(" %s", _to_binary_block(buf->data[j], 8).c_str());
+            const char arr[4][4] = { "▄", "▟", "▙", "█" };
+            printf(" ");
+            for (intptr_t i = 6; i >= 0; i-=2) {
+                if (j < buf->data_offset) {
+                    printf("%s", arr[(buf->data[j]>>i) & 3]);
+                } else {
+                    printf("░");
+                }
+            }
         }
         printf("\n");
     }
-}
-
-template <typename INT, typename SWAP>
-static size_t vf8_buf_write_int(vf8_buf *buf, INT num, SWAP f);
-template <typename INT, typename SWAP>
-static size_t vf8_buf_read_int(vf8_buf *buf, INT *num, SWAP f);
-
-size_t vf8_buf_write_i8(vf8_buf* buf, int8_t num)
-{ return vf8_buf_write_int<int8_t>(buf,num,le8); }
-size_t vf8_buf_write_i16(vf8_buf* buf, int16_t num)
-{ return vf8_buf_write_int<int16_t>(buf,num,le16); }
-size_t vf8_buf_write_i32(vf8_buf* buf, int32_t num)
-{ return vf8_buf_write_int<int32_t>(buf,num,le32); }
-size_t vf8_buf_write_i64(vf8_buf* buf, int64_t num)
-{ return vf8_buf_write_int<int64_t>(buf,num,le64); }
-
-size_t vf8_buf_read_i8(vf8_buf* buf, int8_t *num)
-{ return vf8_buf_read_int<int8_t>(buf,num,le8); }
-size_t vf8_buf_read_i16(vf8_buf* buf, int16_t *num)
-{ return vf8_buf_read_int<int16_t>(buf,num,le16); }
-size_t vf8_buf_read_i32(vf8_buf* buf, int32_t *num)
-{ return vf8_buf_read_int<int32_t>(buf,num,le32); }
-size_t vf8_buf_read_i64(vf8_buf* buf, int64_t *num)
-{ return vf8_buf_read_int<int64_t>(buf,num,le64); }
-
-template <typename INT, typename SWAP>
-static size_t vf8_buf_write_int(vf8_buf *buf, INT num, SWAP f)
-{
-    if (buf->data_offset + sizeof(num) > buf->data_size) return 0;
-    INT t = f(num);
-    memcpy(buf->data + buf->data_offset, &t, sizeof(INT));
-    buf->data_offset += sizeof(num);
-    return sizeof(num);
-}
-
-template <typename INT, typename SWAP>
-static size_t vf8_buf_read_int(vf8_buf *buf, INT *num, SWAP f)
-{
-    if (buf->data_offset + sizeof(*num) > buf->data_size) return 0;
-    INT t;
-    memcpy(&t, buf->data + buf->data_offset, sizeof(INT));
-    *num = f(t);
-    buf->data_offset += sizeof(*num);
-    return sizeof(*num);
-}
-
-size_t vf8_buf_write_bytes(vf8_buf* buf, const char *s, size_t len)
-{
-    if (buf->data_offset + len > buf->data_size) return 0;
-    memcpy(&buf->data[buf->data_offset], s, len);
-    buf->data_offset += len;
-    return len;
-}
-
-size_t vf8_buf_read_bytes(vf8_buf* buf, char *s, size_t len)
-{
-    if (buf->data_offset + len > buf->data_size) return 0;
-    memcpy(s, &buf->data[buf->data_offset], len);
-    buf->data_offset += len;
-    return len;
 }
 
 /*

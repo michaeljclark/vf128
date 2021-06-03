@@ -3,6 +3,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "stdendian.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -22,6 +24,18 @@ typedef double f64;
  * buffer interface
  */
 
+struct vf8_buf;
+struct vf8_span;
+
+typedef struct vf8_buf vf8_buf;
+typedef struct vf8_span vf8_span;
+
+struct vf8_span
+{
+    void *data;
+    size_t length;
+};
+
 struct vf8_buf
 {
     char *data;
@@ -29,28 +43,107 @@ struct vf8_buf
     size_t data_size;
 };
 
-typedef struct vf8_buf vf8_buf;
-
 vf8_buf* vf8_buf_new(size_t size);
 void vf8_buf_destroy(vf8_buf* buf);
 void vf8_buf_dump(vf8_buf *buf);
 
-size_t vf8_buf_write_i8(vf8_buf* buf, int8_t num);
-size_t vf8_buf_write_i16(vf8_buf* buf, int16_t num);
-size_t vf8_buf_write_i32(vf8_buf* buf, int32_t num);
-size_t vf8_buf_write_i64(vf8_buf* buf, int64_t num);
-size_t vf8_buf_write_bytes(vf8_buf* buf, const char *s, size_t len);
+static size_t vf8_buf_write_i8(vf8_buf* buf, int8_t num);
+static size_t vf8_buf_write_i16(vf8_buf* buf, int16_t num);
+static size_t vf8_buf_write_i32(vf8_buf* buf, int32_t num);
+static size_t vf8_buf_write_i64(vf8_buf* buf, int64_t num);
+static size_t vf8_buf_write_bytes(vf8_buf* buf, const char *s, size_t len);
 
-size_t vf8_buf_read_i8(vf8_buf* buf, int8_t *num);
-size_t vf8_buf_read_i16(vf8_buf* buf, int16_t *num);
-size_t vf8_buf_read_i32(vf8_buf* buf, int32_t *num);
-size_t vf8_buf_read_i64(vf8_buf* buf, int64_t *num);
-size_t vf8_buf_read_bytes(vf8_buf* buf, char *s, size_t len);
+static size_t vf8_buf_read_i8(vf8_buf* buf, int8_t *num);
+static size_t vf8_buf_read_i16(vf8_buf* buf, int16_t *num);
+static size_t vf8_buf_read_i32(vf8_buf* buf, int32_t *num);
+static size_t vf8_buf_read_i64(vf8_buf* buf, int64_t *num);
+static size_t vf8_buf_read_bytes(vf8_buf* buf, char *s, size_t len);
 
-void vf8_buf_reset(vf8_buf* buf);
-void vf8_buf_seek(vf8_buf* buf, size_t offset);
-char* vf8_buf_data(vf8_buf *buf);
-size_t vf8_buf_offset(vf8_buf* buf);
+static void vf8_buf_reset(vf8_buf* buf);
+static void vf8_buf_seek(vf8_buf* buf, size_t offset);
+static char* vf8_buf_data(vf8_buf *buf);
+static size_t vf8_buf_offset(vf8_buf* buf);
+
+/*
+ * buffer inline functions
+ */
+
+#define CREFL_FN(Y,X) vf8_ ## Y ## _ ## X
+
+#define CREFL_BUF_WRITE_IMPL(suffix,T,swap)                                \
+static inline size_t CREFL_FN(buf_write,suffix)(vf8_buf *buf, T val)       \
+{                                                                          \
+    if (buf->data_offset + sizeof(T) > buf->data_size) return 0;           \
+    T t = swap(val);                                                       \
+    memcpy(buf->data + buf->data_offset, &t, sizeof(T));                   \
+    buf->data_offset += sizeof(T);                                         \
+    return sizeof(T);                                                      \
+}
+
+CREFL_BUF_WRITE_IMPL(i8,int8_t,le8)
+CREFL_BUF_WRITE_IMPL(i16,int16_t,le16)
+CREFL_BUF_WRITE_IMPL(i32,int32_t,le32)
+CREFL_BUF_WRITE_IMPL(i64,int64_t,le64)
+
+#define CREFL_BUF_READ_IMPL(suffix,T,swap)                                 \
+static inline size_t CREFL_FN(buf_read,suffix)(vf8_buf *buf, T* val)       \
+{                                                                          \
+    if (buf->data_offset + sizeof(T) > buf->data_size) return 0;           \
+    T t;                                                                   \
+    memcpy(&t, buf->data + buf->data_offset, sizeof(T));                   \
+    *val = swap(t);                                                        \
+    buf->data_offset += sizeof(T);                                         \
+    return sizeof(T);                                                      \
+}
+
+CREFL_BUF_READ_IMPL(i8,int8_t,le8)
+CREFL_BUF_READ_IMPL(i16,int16_t,le16)
+CREFL_BUF_READ_IMPL(i32,int32_t,le32)
+CREFL_BUF_READ_IMPL(i64,int64_t,le64)
+
+static inline size_t vf8_buf_write_bytes(vf8_buf* buf, const char *s, size_t len)
+{
+    if (buf->data_offset + len > buf->data_size) return 0;
+    memcpy(&buf->data[buf->data_offset], s, len);
+    buf->data_offset += len;
+    return len;
+}
+
+static inline size_t vf8_buf_read_bytes(vf8_buf* buf, char *s, size_t len)
+{
+    if (buf->data_offset + len > buf->data_size) return 0;
+    memcpy(s, &buf->data[buf->data_offset], len);
+    buf->data_offset += len;
+    return len;
+}
+
+static inline void vf8_buf_reset(vf8_buf* buf)
+{
+    buf->data_offset = 0;
+}
+
+static inline void vf8_buf_seek(vf8_buf* buf, size_t offset)
+{
+    buf->data_offset = offset;
+}
+
+static inline char* vf8_buf_data(vf8_buf *buf)
+{
+    return buf->data;
+}
+
+static inline size_t vf8_buf_offset(vf8_buf* buf)
+{
+    return buf->data_offset;
+}
+
+static inline vf8_span vf8_buf_remaining(vf8_buf* buf)
+{
+    vf8_span s = {
+        &buf->data[buf->data_offset], buf->data_size - buf->data_offset
+    };
+    return s;
+}
 
 /*
  * floating point helpers
