@@ -68,7 +68,45 @@ static size_t vf8_buf_offset(vf8_buf* buf);
  * buffer inline functions
  */
 
+#if defined(__i386__) || defined(__x86_64__) || defined(_M_IX86) || defined(_M_X64) || defined(_M_AMD64)
+#ifndef USE_UNALIGNED_ACCESSES
+#define USE_UNALIGNED_ACCESSES 1
+#endif
+#endif
+
+#if defined (_MSC_VER)
+#define USE_CRT_MEMCPY 0
+#else
+#define USE_CRT_MEMCPY 1
+#endif
+
 #define CREFL_FN(Y,X) vf8_ ## Y ## _ ## X
+
+#if USE_UNALIGNED_ACCESSES && !USE_CRT_MEMCPY
+
+#define CREFL_BUF_WRITE_IMPL(suffix,T,swap)                                \
+static inline size_t CREFL_FN(buf_write,suffix)(vf8_buf *buf, T val)       \
+{                                                                          \
+    if (buf->data_offset + sizeof(T) > buf->data_size) return 0;           \
+    T t = swap(val);                                                       \
+    *(T*)(buf->data + buf->data_offset) = t;                               \
+    buf->data_offset += sizeof(T);                                         \
+    return sizeof(T);                                                      \
+}
+
+
+#define CREFL_BUF_READ_IMPL(suffix,T,swap)                                 \
+static inline size_t CREFL_FN(buf_read,suffix)(vf8_buf *buf, T* val)       \
+{                                                                          \
+    if (buf->data_offset + sizeof(T) > buf->data_size) return 0;           \
+    T t;                                                                   \
+    t = *(T*)(buf->data + buf->data_offset);                               \
+    *val = swap(t);                                                        \
+    buf->data_offset += sizeof(T);                                         \
+    return sizeof(T);                                                      \
+}
+
+#else
 
 #define CREFL_BUF_WRITE_IMPL(suffix,T,swap)                                \
 static inline size_t CREFL_FN(buf_write,suffix)(vf8_buf *buf, T val)       \
@@ -80,10 +118,6 @@ static inline size_t CREFL_FN(buf_write,suffix)(vf8_buf *buf, T val)       \
     return sizeof(T);                                                      \
 }
 
-CREFL_BUF_WRITE_IMPL(i8,int8_t,le8)
-CREFL_BUF_WRITE_IMPL(i16,int16_t,le16)
-CREFL_BUF_WRITE_IMPL(i32,int32_t,le32)
-CREFL_BUF_WRITE_IMPL(i64,int64_t,le64)
 
 #define CREFL_BUF_READ_IMPL(suffix,T,swap)                                 \
 static inline size_t CREFL_FN(buf_read,suffix)(vf8_buf *buf, T* val)       \
@@ -96,23 +130,42 @@ static inline size_t CREFL_FN(buf_read,suffix)(vf8_buf *buf, T* val)       \
     return sizeof(T);                                                      \
 }
 
+#endif
+
+CREFL_BUF_WRITE_IMPL(i8,int8_t,le8)
+CREFL_BUF_WRITE_IMPL(i16,int16_t,le16)
+CREFL_BUF_WRITE_IMPL(i32,int32_t,le32)
+CREFL_BUF_WRITE_IMPL(i64,int64_t,le64)
+
 CREFL_BUF_READ_IMPL(i8,int8_t,le8)
 CREFL_BUF_READ_IMPL(i16,int16_t,le16)
 CREFL_BUF_READ_IMPL(i32,int32_t,le32)
 CREFL_BUF_READ_IMPL(i64,int64_t,le64)
 
-static inline size_t vf8_buf_write_bytes(vf8_buf* buf, const char *s, size_t len)
+static inline size_t vf8_buf_write_bytes(vf8_buf* buf, const char *src, size_t len)
 {
     if (buf->data_offset + len > buf->data_size) return 0;
-    memcpy(&buf->data[buf->data_offset], s, len);
+#if USE_CRT_MEMCPY
+    memcpy(&buf->data[buf->data_offset], src, len);
+#else
+    char *dst = &buf->data[buf->data_offset];
+    size_t l = len;
+    while (l-- > 0) *dst++ = *src++;
+#endif
     buf->data_offset += len;
     return len;
 }
 
-static inline size_t vf8_buf_read_bytes(vf8_buf* buf, char *s, size_t len)
+static inline size_t vf8_buf_read_bytes(vf8_buf* buf, char *dst, size_t len)
 {
     if (buf->data_offset + len > buf->data_size) return 0;
-    memcpy(s, &buf->data[buf->data_offset], len);
+#if USE_CRT_MEMCPY
+    memcpy(dst, &buf->data[buf->data_offset], len);
+#else
+    const char *src = &buf->data[buf->data_offset];
+    size_t l = len;
+    while (l-- > 0) *dst++ = *src++;
+#endif
     buf->data_offset += len;
     return len;
 }

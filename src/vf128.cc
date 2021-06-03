@@ -13,12 +13,6 @@
 
 #define DEBUG_ENCODING 0
 
-#if defined(__i386__) || defined(__x86_64__) || defined(_M_IX86) || defined(_M_X64) || defined(_M_AMD64)
-#ifndef USE_UNALIGNED_ACCESSES
-#define USE_UNALIGNED_ACCESSES 1
-#endif
-#endif
-
 /*
  * buffer implementation
  */
