@@ -46,6 +46,10 @@ leading 1 added, and right-shifted so there are no trailing zeros. The
 point is to the right of the leading one thus the exponent is the same
 as the normalized IEEE 754 exponent.
 
+![example vf128 encoding for 15.5](doc/vf128-example-1.svg)
+
+_Figure 1: example vf128 encoding for 15.5_
+
 ### float7
 
 The _vf128_ format contains an embedded format called _float7_ which
