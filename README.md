@@ -37,6 +37,15 @@ and mantissa fields being non-zero.
 |:---------------------------------|:---------------------------------|
 | (0-3) x 8-bit packed exponent    | (0-15) x 8-bit packed mantissa   |
 
+The exponent payload is an unbiased little-endian two's complement signed
+integer. The exponent payload contains the equivalent of the IEEE 754
+exponent less the bias, so unpacking the exponent requires one addition.
+
+The mantissa payload is a little-endian unsigned integer with explicit
+leading 1 added, and right-shifted so there are no trailing zeros. The
+point is to the right of the leading one thus the exponent is the same
+as the normalized IEEE 754 exponent.
+
 ### float7
 
 The _vf128_ format contains an embedded format called _float7_ which
@@ -95,8 +104,15 @@ it can be stored in the minimum number of bytes.
 - `<exponent-payload>`
 - `<mantissa-payload>`
 
-To decode, the leading zeros are counted to find a shift to left-justify
-the fraction, and truncate the explicit leading one.
+The mantissa is normalized to a form where the point is to the right of the
+explicit leading one. This means the exponent simply needs the target bias
+added when unpacking. The explicit leading one is used to left-justify
+the fraction when unpacking it.
+
+- To encode, the trailing zeros are counted to find shift to right-justify
+  the fraction and add the explicit leading one.
+- To decode, the leading zeros are counted to find shift to left-justify
+  the fraction, and drop the explicit leading one.
 
 ### integers
 
