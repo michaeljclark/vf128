@@ -49,7 +49,7 @@ static const unsigned char i12_leb[] = { 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x8
 static const unsigned char i12_vlu[] = { 0x7F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40 };
 static const unsigned char pi_vf8[] = { 0x17, 0x01, 0xA3, 0x85, 0x88, 0x6A, 0x3F, 0x24, 0x03 };
 
-struct bench_result { const char *name; llong count; double t; };
+struct bench_result { const char *name; llong count; double t; llong size; };
 
 static bench_result bench_ascii_strtod(llong count)
 {
@@ -63,7 +63,7 @@ static bench_result bench_ascii_strtod(llong count)
     assert(fabs(f - 3.141592) < 0.0001);
 
     double t = (double)duration_cast<nanoseconds>(et - st).count();
-    return bench_result { "f64-strtod-base10", count, t };
+    return bench_result { "f64-strtod-base10", count, t, 8 * count };
 }
 
 static bench_result bench_asn1_read_byptr_real(llong count)
@@ -83,7 +83,7 @@ static bench_result bench_asn1_read_byptr_real(llong count)
     vf_buf_destroy(buf);
 
     double t = (double)duration_cast<nanoseconds>(et - st).count();
-    return bench_result { "f64-asn.1-read-byptr", count, t };
+    return bench_result { "f64-asn.1-read-byptr", count, t, 8 * count };
 }
 
 static bench_result bench_asn1_read_byval_real(llong count)
@@ -104,7 +104,7 @@ static bench_result bench_asn1_read_byval_real(llong count)
     vf_buf_destroy(buf);
 
     double t = (double)duration_cast<nanoseconds>(et - st).count();
-    return bench_result { "f64-asn.1-read-byval", count, t };
+    return bench_result { "f64-asn.1-read-byval", count, t, 8 * count };
 }
 
 static bench_result bench_asn1_write_byptr_real(llong count)
@@ -125,7 +125,7 @@ static bench_result bench_asn1_write_byptr_real(llong count)
     vf_buf_destroy(buf);
 
     double t = (double)duration_cast<nanoseconds>(et - st).count();
-    return bench_result { "f64-asn.1-write-byptr", count, t };
+    return bench_result { "f64-asn.1-write-byptr", count, t, 8 * count };
 }
 
 static bench_result bench_asn1_write_byval_real(llong count)
@@ -147,10 +147,10 @@ static bench_result bench_asn1_write_byval_real(llong count)
     vf_buf_destroy(buf);
 
     double t = (double)duration_cast<nanoseconds>(et - st).count();
-    return bench_result { "f64-asn.1-write-byval", count, t };
+    return bench_result { "f64-asn.1-write-byval", count, t, 8 * count };
 }
 
-static bench_result bench_vf_read_byptr_real(llong count)
+static bench_result bench_vf64_read_byptr_real(llong count)
 {
     double f;
     vf_buf *buf = vf_buf_new(128);
@@ -167,10 +167,10 @@ static bench_result bench_vf_read_byptr_real(llong count)
     vf_buf_destroy(buf);
 
     double t = (double)duration_cast<nanoseconds>(et - st).count();
-    return bench_result { "f64-vf128-read-byptr", count, t };
+    return bench_result { "f64-vf128-read-byptr", count, t, 8 * count };
 }
 
-static bench_result bench_vf_read_byval_real(llong count)
+static bench_result bench_vf64_read_byval_real(llong count)
 {
     f64_result r;
     vf_buf *buf = vf_buf_new(128);
@@ -188,10 +188,10 @@ static bench_result bench_vf_read_byval_real(llong count)
     vf_buf_destroy(buf);
 
     double t = (double)duration_cast<nanoseconds>(et - st).count();
-    return bench_result { "f64-vf128-read-byval", count, t };
+    return bench_result { "f64-vf128-read-byval", count, t, 8 * count };
 }
 
-static bench_result bench_vf_write_byptr_real(llong count)
+static bench_result bench_vf64_write_byptr_real(llong count)
 {
     double f = 3.141592653589793;
     vf_buf *buf = vf_buf_new(128);
@@ -209,10 +209,10 @@ static bench_result bench_vf_write_byptr_real(llong count)
     vf_buf_destroy(buf);
 
     double t = (double)duration_cast<nanoseconds>(et - st).count();
-    return bench_result { "f64-vf128-write-byptr", count, t };
+    return bench_result { "f64-vf128-write-byptr", count, t, 8 * count };
 }
 
-static bench_result bench_vf_write_byval_real(llong count)
+static bench_result bench_vf64_write_byval_real(llong count)
 {
     f64_result r;
     double f = 3.141592653589793;
@@ -231,7 +231,91 @@ static bench_result bench_vf_write_byval_real(llong count)
     vf_buf_destroy(buf);
 
     double t = (double)duration_cast<nanoseconds>(et - st).count();
-    return bench_result { "f64-vf128-write-byval", count, t };
+    return bench_result { "f64-vf128-write-byval", count, t, 8 * count };
+}
+
+static bench_result bench_vf32_read_byptr_real(llong count)
+{
+    float f;
+    vf_buf *buf = vf_buf_new(128);
+    vf_buf_write_bytes(buf, (const char*)pi_vf8, sizeof(pi_vf8));
+
+    auto st = high_resolution_clock::now();
+    for (llong i = 0; i < count; i++) {
+        vf_buf_reset(buf);
+        assert(!vf_f32_read(buf, &f));
+    }
+    auto et = high_resolution_clock::now();
+
+    assert(fabs(f - 3.141592f) < 0.0001);
+    vf_buf_destroy(buf);
+
+    double t = (double)duration_cast<nanoseconds>(et - st).count();
+    return bench_result { "f32-vf128-read-byptr", count, t, 4 * count };
+}
+
+static bench_result bench_vf32_read_byval_real(llong count)
+{
+    f32_result r;
+    vf_buf *buf = vf_buf_new(128);
+    vf_buf_write_bytes(buf, (const char*)pi_vf8, sizeof(pi_vf8));
+
+    auto st = high_resolution_clock::now();
+    for (llong i = 0; i < count; i++) {
+        vf_buf_reset(buf);
+        r = vf_f32_read_byval(buf);
+        assert(!r.error);
+    }
+    auto et = high_resolution_clock::now();
+
+    assert(fabs(r.value - 3.141592f) < 0.0001);
+    vf_buf_destroy(buf);
+
+    double t = (double)duration_cast<nanoseconds>(et - st).count();
+    return bench_result { "f32-vf128-read-byval", count, t, 4 * count };
+}
+
+static bench_result bench_vf32_write_byptr_real(llong count)
+{
+    float f = 3.141592f;
+    vf_buf *buf = vf_buf_new(128);
+
+    auto st = high_resolution_clock::now();
+    for (llong i = 0; i < count; i++) {
+        vf_buf_reset(buf);
+        assert(!vf_f32_write(buf, &f));
+    }
+    auto et = high_resolution_clock::now();
+
+    vf_buf_reset(buf);
+    vf_f32_read(buf, &f);
+    assert(fabs(f - 3.141592f) < 0.0001);
+    vf_buf_destroy(buf);
+
+    double t = (double)duration_cast<nanoseconds>(et - st).count();
+    return bench_result { "f32-vf128-write-byptr", count, t, 4 * count };
+}
+
+static bench_result bench_vf32_write_byval_real(llong count)
+{
+    f32_result r;
+    float f = 3.141592f;
+    vf_buf *buf = vf_buf_new(128);
+
+    auto st = high_resolution_clock::now();
+    for (llong i = 0; i < count; i++) {
+        vf_buf_reset(buf);
+        assert(!vf_f32_write_byval(buf, f));
+    }
+    auto et = high_resolution_clock::now();
+
+    vf_buf_reset(buf);
+    r = vf_f32_read_byval(buf);
+    assert(fabs(r.value - 3.141592f) < 0.0001);
+    vf_buf_destroy(buf);
+
+    double t = (double)duration_cast<nanoseconds>(et - st).count();
+    return bench_result { "f32-vf128-write-byval", count, t, 4 * count };
 }
 
 static bench_result bench_ascii_strtoull(llong count)
@@ -246,7 +330,7 @@ static bench_result bench_ascii_strtoull(llong count)
     assert(d == i13);
 
     double t = (double)duration_cast<nanoseconds>(et - st).count();
-    return bench_result { "u64-strtoull-base10", count, t };
+    return bench_result { "u64-strtoull-base10", count, t, 8 * count };
 }
 
 static bench_result bench_asn1_read_byptr_integer(llong count)
@@ -266,7 +350,7 @@ static bench_result bench_asn1_read_byptr_integer(llong count)
     vf_buf_destroy(buf);
 
     double t = (double)duration_cast<nanoseconds>(et - st).count();
-    return bench_result { "u64-asn1.1-read-byptr", count, t };
+    return bench_result { "u64-asn1.1-read-byptr", count, t, 8 * count };
 }
 
 static bench_result bench_asn1_read_byval_integer(llong count)
@@ -287,7 +371,7 @@ static bench_result bench_asn1_read_byval_integer(llong count)
     vf_buf_destroy(buf);
 
     double t = (double)duration_cast<nanoseconds>(et - st).count();
-    return bench_result { "u64-asn1.1-read-byval", count, t };
+    return bench_result { "u64-asn1.1-read-byval", count, t, 8 * count };
 }
 
 static bench_result bench_asn1_write_byptr_integer(llong count)
@@ -308,7 +392,7 @@ static bench_result bench_asn1_write_byptr_integer(llong count)
     vf_buf_destroy(buf);
 
     double t = (double)duration_cast<nanoseconds>(et - st).count();
-    return bench_result { "u64-asn1.1-write-byptr", count, t };
+    return bench_result { "u64-asn1.1-write-byptr", count, t, 8 * count };
 }
 
 static bench_result bench_asn1_write_byval_integer(llong count)
@@ -330,7 +414,7 @@ static bench_result bench_asn1_write_byval_integer(llong count)
     vf_buf_destroy(buf);
 
     double t = (double)duration_cast<nanoseconds>(et - st).count();
-    return bench_result { "u64-asn1.1-write-byval", count, t };
+    return bench_result { "u64-asn1.1-write-byval", count, t, 8 * count };
 }
 
 static bench_result bench_leb_read_byptr_integer(llong count)
@@ -350,7 +434,7 @@ static bench_result bench_leb_read_byptr_integer(llong count)
     vf_buf_destroy(buf);
 
     double t = (double)duration_cast<nanoseconds>(et - st).count();
-    return bench_result { "u64-leb128-read-byptr", count, t };
+    return bench_result { "u64-leb128-read-byptr", count, t, 8 * count };
 }
 
 static bench_result bench_leb_read_byval_integer(llong count)
@@ -371,7 +455,7 @@ static bench_result bench_leb_read_byval_integer(llong count)
     assert(r.value == i12);
 
     double t = (double)duration_cast<nanoseconds>(et - st).count();
-    return bench_result { "u64-leb128-read-byval", count, t };
+    return bench_result { "u64-leb128-read-byval", count, t, 8 * count };
 }
 
 static bench_result bench_leb_write_byptr_integer(llong count)
@@ -392,7 +476,7 @@ static bench_result bench_leb_write_byptr_integer(llong count)
     vf_buf_destroy(buf);
 
     double t = (double)duration_cast<nanoseconds>(et - st).count();
-    return bench_result { "u64-leb128-write-byptr", count, t };
+    return bench_result { "u64-leb128-write-byptr", count, t, 8 * count };
 }
 
 static bench_result bench_leb_write_byval_integer(llong count)
@@ -413,7 +497,7 @@ static bench_result bench_leb_write_byval_integer(llong count)
     vf_buf_destroy(buf);
 
     double t = (double)duration_cast<nanoseconds>(et - st).count();
-    return bench_result { "u64-leb128-write-byval", count, t };
+    return bench_result { "u64-leb128-write-byval", count, t, 8 * count };
 }
 
 static bench_result bench_vlu_read_byptr_integer(llong count)
@@ -433,7 +517,7 @@ static bench_result bench_vlu_read_byptr_integer(llong count)
     vf_buf_destroy(buf);
 
     double t = (double)duration_cast<nanoseconds>(et - st).count();
-    return bench_result { "u64-vlu8-read-byptr", count, t };
+    return bench_result { "u64-vlu8-read-byptr", count, t, 8 * count };
 }
 
 static bench_result bench_vlu_read_byval_integer(llong count)
@@ -454,7 +538,7 @@ static bench_result bench_vlu_read_byval_integer(llong count)
     vf_buf_destroy(buf);
 
     double t = (double)duration_cast<nanoseconds>(et - st).count();
-    return bench_result { "u64-vlu8-read-byval", count, t };
+    return bench_result { "u64-vlu8-read-byval", count, t, 8 * count };
 }
 
 static bench_result bench_vlu_write_byptr_integer(llong count)
@@ -475,7 +559,7 @@ static bench_result bench_vlu_write_byptr_integer(llong count)
     vf_buf_destroy(buf);
 
     double t = (double)duration_cast<nanoseconds>(et - st).count();
-    return bench_result { "u64-vlu8-write-byptr", count, t };
+    return bench_result { "u64-vlu8-write-byptr", count, t, 8 * count };
 }
 
 static bench_result bench_vlu_write_byval_integer(llong count)
@@ -496,7 +580,7 @@ static bench_result bench_vlu_write_byval_integer(llong count)
     vf_buf_destroy(buf);
 
     double t = (double)duration_cast<nanoseconds>(et - st).count();
-    return bench_result { "u64-vlu8-write-byval", count, t };
+    return bench_result { "u64-vlu8-write-byval", count, t, 8 * count };
 }
 
 static const char* format_unit(llong count)
@@ -539,10 +623,14 @@ static bench_result(* const benchmarks[])(llong) = {
     bench_asn1_read_byval_real,
     bench_asn1_write_byptr_real,
     bench_asn1_write_byval_real,
-    bench_vf_read_byptr_real,
-    bench_vf_read_byval_real,
-    bench_vf_write_byptr_real,
-    bench_vf_write_byval_real,
+    bench_vf32_read_byptr_real,
+    bench_vf32_read_byval_real,
+    bench_vf32_write_byptr_real,
+    bench_vf32_write_byval_real,
+    bench_vf64_read_byptr_real,
+    bench_vf64_read_byval_real,
+    bench_vf64_write_byptr_real,
+    bench_vf64_write_byval_real,
     bench_ascii_strtoull,
     bench_asn1_read_byptr_integer,
     bench_asn1_read_byval_integer,
@@ -586,7 +674,8 @@ static void print_rules(const char *prefix)
     );
 }
 
-static void print_result(const char *prefix, const char *name, llong count, double t)
+static void print_result(const char *prefix, const char *name,
+    llong count, double t, llong size)
 {
     printf("%s%-24s %7s %7.2f %7.2f %13s %9.3f\n",
         prefix,
@@ -595,7 +684,7 @@ static void print_result(const char *prefix, const char *name, llong count, doub
         t / 1e9,
         t / count,
         format_comma((llong)(count * (1e9 / t))),
-        8 * count * (1e9 / t) / (1024*1024)
+        size * (1e9 / t) / (1024*1024)
     );
 }
 
@@ -603,6 +692,7 @@ static void run_benchmark(size_t n, llong repeat, llong count, llong pause_ms)
 {
     double min_t = 0., max_t = 0., sum_t = 0.;
     const char* name = "";
+    size_t size;
     if (repeat > 0) {
         char num[32];
         snprintf(num, sizeof(num), "  [%2zu] ", n);
@@ -612,25 +702,26 @@ static void run_benchmark(size_t n, llong repeat, llong count, llong pause_ms)
     for (llong i = 0; i < llabs(repeat); i++) {
         bench_result r = benchmarks[n](count);
         name = r.name;
+        size = r.size;
         if (min_t == 0. || r.t < min_t) min_t = r.t;
         if (max_t == 0. || r.t > max_t) max_t = r.t;
         sum_t += r.t;
         if (repeat > 0) {
             char run[32];
             snprintf(run, sizeof(run), "%3llu/%-3llu", i+1, repeat);
-            print_result(run, name, count, r.t);
+            print_result(run, name, count, r.t, size);
         }
     }
     if (repeat > 0) {
         print_rules("       ");
-        print_result("worst: ", name, count, max_t);
-        print_result("  avg: ", name, count, sum_t / repeat);
-        print_result(" best: ", name, count, min_t);
+        print_result("worst: ", name, count, max_t, size);
+        print_result("  avg: ", name, count, sum_t / repeat, size);
+        print_result(" best: ", name, count, min_t, size);
         puts("");
     } else if (llabs(repeat) >= 1) {
         char num[32];
         snprintf(num, sizeof(num), "[%2zu] ", n);
-        print_result(num, name, count, min_t);
+        print_result(num, name, count, min_t, size);
     }
 }
 

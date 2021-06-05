@@ -334,6 +334,7 @@ struct asn1_hdr
 };
 typedef struct asn1_hdr asn1_hdr;
 
+struct f32_result { f32 value; s32 error; };
 struct f64_result { f64 value; s64 error; };
 struct s64_result { s64 value; s64 error; };
 struct u64_result { u64 value; s64 error; };
@@ -404,9 +405,13 @@ int vf_asn1_der_real_f64_write_byval(vf_buf *buf, asn1_tag _tag, const double va
 
 int vf_f64_read(vf_buf *buf, double *value);
 int vf_f64_write(vf_buf *buf, const double *value);
-
 struct f64_result vf_f64_read_byval(vf_buf *buf);
 int vf_f64_write_byval(vf_buf *buf, const double value);
+
+int vf_f32_read(vf_buf *buf, float *value);
+int vf_f32_write(vf_buf *buf, const float *value);
+struct f32_result vf_f32_read_byval(vf_buf *buf);
+int vf_f32_write_byval(vf_buf *buf, const float value);
 
 int leb_u64_read(vf_buf *buf, u64 *value);
 int leb_u64_write(vf_buf *buf, const u64 *value);

@@ -1194,7 +1194,7 @@ int vf_asn1_der_real_f64_write_byval(vf_buf *buf, asn1_tag _tag, const double va
 }
 
 /*
- * vf8 compressed float
+ * vf8 compressed float - f64
  */
 
 /*
@@ -1221,7 +1221,7 @@ static vf_f64_data vf_f64_data_get(double value)
 }
 
 #if DEBUG_ENCODING
-static void _vf_debug_pack(double v, u8 pre, s64 vp_exp, u64 vp_man, s64 vd_exp, u64 vd_man)
+static void _vf_f64_debug(double v, u8 pre, s64 vp_exp, u64 vp_man, s64 vd_exp, u64 vd_man)
 {
     bool vf_inl = (pre >> 7) & 1;
     bool vf_sgn = (pre >> 6) & 1;
@@ -1335,7 +1335,7 @@ int vf_f64_read(vf_buf *buf, double *value)
     *value = v;
 
 #if DEBUG_ENCODING
-    _vf_debug_pack(v, pre, vp_exp - f64_exp_bias, vp_man << 12, vr_exp, vr_man);
+    _vf_f64_debug(v, pre, vp_exp - f64_exp_bias, vp_man << 12, vr_exp, vr_man);
 #endif
 
     return 0;
@@ -1436,7 +1436,7 @@ f64_result vf_f64_read_byval(vf_buf *buf)
     v = f64_pack_float(f64_struct{vp_man, (u64)vp_exp, vf_sgn});
 
 #if DEBUG_ENCODING
-    _vf_debug_pack(v, pre, vp_exp - f64_exp_bias, vp_man << 12, vr_exp, vr_man);
+    _vf_f64_debug(v, pre, vp_exp - f64_exp_bias, vp_man << 12, vr_exp, vr_man);
 #endif
 
     return f64_result { v, 0 };
@@ -1524,7 +1524,7 @@ int vf_f64_write(vf_buf *buf, const double *value)
     }
 
 #if DEBUG_ENCODING
-    _vf_debug_pack(v, pre, d.sexp, d.frac, vw_exp, vw_man);
+    _vf_f64_debug(v, pre, d.sexp, d.frac, vw_exp, vw_man);
 #endif
 
     return 0;
@@ -1612,11 +1612,454 @@ int vf_f64_write_byval(vf_buf *buf, const double value)
     }
 
 #if DEBUG_ENCODING
-    _vf_debug_pack(v, pre, d.sexp, d.frac, vw_exp, vw_man);
+    _vf_f64_debug(v, pre, d.sexp, d.frac, vw_exp, vw_man);
 #endif
 
     return 0;
 }
+
+/*
+ * vf8 compressed float - f32
+ */
+
+/*
+ * vf_f32_data contains fraction, signed exponent, their
+ * encoded lengths and flags for sign, infinity, nan and zero.
+ */
+struct vf_f32_data
+{
+    bool sign;
+    s32 sexp;
+    u32 frac;
+};
+
+/*
+ * extract exponent and left-justified fraction
+ */
+static vf_f32_data vf_f32_data_get(float value)
+{
+    bool sign = !!f32_sign_dec(value);
+    s32 sexp = (s32)(f32_exp_dec(value) - f32_exp_bias);
+    u32 frac = (u32)f32_mant_dec(value) << (f32_exp_size + 1);
+
+    return vf_f32_data { sign, sexp, frac };
+}
+
+#if DEBUG_ENCODING
+static void _vf_f32_debug(float v, u8 pre, s32 vp_exp, u32 vp_man, s32 vd_exp, u32 vd_man)
+{
+    bool vf_inl = (pre >> 7) & 1;
+    bool vf_sgn = (pre >> 6) & 1;
+    int vf_exp = (pre >> 4) & 3;
+    int vf_man = pre & 15;
+
+    printf("\n%9s %20s -> %18s %5s -> %1s %1s %2s %4s %4s\n",
+        "value (dec)", "value (hex)", "fraction", "exp",
+        "i", "s", "ex", "mant", "len");
+    printf("%8f %20a    0x%08x %05d    %1u %1u %c%c %c%c%c%c",
+        v, v, vp_man, vp_exp, vf_inl, vf_sgn,
+        '0' + ((vf_exp >> 1) & 1),
+        '0' + ((vf_exp >> 0) & 1),
+        '0' + ((vf_man >> 3) & 1),
+        '0' + ((vf_man >> 2) & 1),
+        '0' + ((vf_man >> 1) & 1),
+        '0' + ((vf_man >> 0) & 1));
+
+    printf(" [%02d] { pre=0x%02hhx", 1 + (vf_inl ? 0 : vf_exp + vf_man), pre);
+    if (!vf_inl && vf_man) {
+        printf(" man=0x%02x", vd_man);
+    }
+    if (!vf_inl && vf_exp) {
+        printf(" exp=%d", vd_exp);
+    }
+    printf(" }\n");
+}
+#endif
+
+int vf_f32_read(vf_buf *buf, float *value)
+{
+    s8 pre;
+    float v = 0;
+    bool vf_inl;
+    bool vf_sgn;
+    int vf_exp;
+    int vf_man;
+    u32 vr_man = 0;
+    s32 vr_exp = 0;
+    u32 vp_man = 0;
+    s32 vp_exp = 0;
+
+    if (vf_buf_read_i8(buf, &pre) != 1) {
+        goto err;
+    }
+
+    vf_inl = (pre >> 7) & 1;
+    vf_sgn = (pre >> 6) & 1;
+    vf_exp = (pre >> 4) & 3;
+    vf_man = pre & 15;
+
+    if (!vf_inl) {
+        if (vf_exp) {
+            s64_result r = vf_le_ber_integer_s64_read_byval(buf, vf_exp);
+            if (r.error < 0) goto err;
+            vr_exp = (s32)r.value;
+        }
+        if (vf_man) {
+            u64_result r = vf_le_ber_integer_u64_read_byval(buf, vf_man);
+            if (r.error < 0) goto err;
+
+            /* if there are less than 32 leading zeros, then we must
+             * truncate some precision from the right-most bits. */
+            size_t lz = clz(r.value);
+            size_t sh = lz < 32 ? 32 - lz : 0;
+            vr_man = (u32)(r.value >> sh);
+        }
+    }
+
+    /* inline exponent and mantissa using float7 */
+    if (vf_inl) {
+        if (vf_exp == 0) {
+            if (vf_man > 0) {
+                size_t lz = clz((u32)vf_man);
+                /* inline subnormal - normalize by calculating exponent
+                 * based on the leading zero count for the 4 bits right
+                 * of the point hence 27 = (31 - 4) then left-justify
+                 * the mantissa and truncate the leading 1. */
+                vp_exp = f32_exp_bias + 27 - (u32)lz;
+                vp_man = ((u32)vf_man << (lz + 1)) >> (f32_exp_size + 1);
+            } else {
+                /* Zero */
+                vp_exp = 0;
+                vp_man = 0;
+            }
+        }
+        else if (vf_exp == 3) {
+            /* inline Inf/NaN - set exponent then left-justify the mantissa,
+             * containing 0b0000 for infinity or 0b1000 for canonical NaN. */
+            vp_exp = f32_exp_mask;
+            vp_man = (u32)vf_man << (f32_mant_size - 4);
+        }
+        else {
+            /* inline normal - adjust exponent bias from 2-bit bias 1 to
+             * the IEEE 754 bias then left-justify the mantissa. */
+            vp_exp = f32_exp_bias + vf_exp - 1;
+            vp_man = (u32)vf_man << (f32_mant_size - 4);
+        }
+    }
+    /* out-of-line little-endian exponent and mantissa */
+    else {
+        size_t lz = clz(vr_man);
+        if (vr_exp <= -(s32)f32_exp_bias) {
+            /* normal to subnormal - calculate shift using exponent delta
+             * then left-justify the mantissa preserving the leading 1. */
+            assert(vr_exp >= -(s32)f32_exp_bias - f32_mant_size);
+            size_t sh = f32_exp_bias + vr_exp + (u32)lz - f32_exp_size;
+            vp_exp = 0;
+            vp_man = (u32)vr_man << sh;
+        } else {
+            /* normal - if no exponent, mantissa is an integer so calculate
+             * exponent from the leading zero count otherwise copy exponent
+             * then left-justify the mantissa and truncate the leading 1. */
+            vp_exp = f32_exp_bias + (vf_exp == 0 ? 31 - (u32)lz : vr_exp);
+            vp_man = (u32)vr_man << (lz + 1) >> (f32_exp_size + 1);
+        }
+    }
+
+    v = f32_pack_float(f32_struct{vp_man, (u32)vp_exp, vf_sgn});
+    *value = v;
+
+#if DEBUG_ENCODING
+    _vf_f32_debug(v, pre, vp_exp - f32_exp_bias, vp_man << 9, vr_exp, vr_man);
+#endif
+
+    return 0;
+err:
+    *value = 0;
+    return -1;
+}
+
+enum : u32 {
+    u32_msb = 0x80000000u,
+    u32_msn = 0xf0000000u
+};
+
+f32_result vf_f32_read_byval(vf_buf *buf)
+{
+    s8 pre;
+    float v = 0;
+    bool vf_inl;
+    bool vf_sgn;
+    int vf_exp;
+    int vf_man;
+    u32 vr_man = 0;
+    s32 vr_exp = 0;
+    u32 vp_man = 0;
+    s32 vp_exp = 0;
+
+    if (vf_buf_read_i8(buf, &pre) != 1) {
+        return f32_result { 0, -1 };
+    }
+
+    vf_inl = (pre >> 7) & 1;
+    vf_sgn = (pre >> 6) & 1;
+    vf_exp = (pre >> 4) & 3;
+    vf_man = pre & 15;
+
+    if (!vf_inl) {
+        if (vf_exp) {
+            s64_result r = vf_le_ber_integer_s64_read_byval(buf, vf_exp);
+            if (r.error < 0) return f32_result { 0, (s32)r.error };
+            vr_exp = (s32)r.value;
+        }
+        if (vf_man) {
+            u64_result r = vf_le_ber_integer_u64_read_byval(buf, vf_man);
+            if (r.error < 0) return f32_result { 0, (s32)r.error };
+
+            /* if there are less than 32 leading zeros, then we must
+             * truncate some precision from the right-most bits. */
+            size_t lz = clz(r.value);
+            size_t sh = lz < 32 ? 32 - lz : 0;
+            vr_man = (u32)(r.value >> sh);
+        }
+    }
+
+    /* inline exponent and mantissa using float7 */
+    if (vf_inl) {
+        if (vf_exp == 0) {
+            if (vf_man > 0) {
+                size_t lz = clz((u32)vf_man);
+                /* inline subnormal - normalize by calculating exponent
+                 * based on the leading zero count for the 4 bits right
+                 * of the point hence 27 = (31 - 4) then left-justify
+                 * the mantissa and truncate the leading 1. */
+                vp_exp = f32_exp_bias + 27 - (u32)lz;
+                vp_man = ((u32)vf_man << (lz + 1)) >> (f32_exp_size + 1);
+            } else {
+                /* Zero */
+                vp_exp = 0;
+                vp_man = 0;
+            }
+        }
+        else if (vf_exp == 3) {
+            /* inline Inf/NaN - set exponent then left-justify the mantissa,
+             * containing 0b0000 for infinity or 0b1000 for canonical NaN. */
+            vp_exp = f32_exp_mask;
+            vp_man = (u32)vf_man << (f32_mant_size - 4);
+        }
+        else {
+            /* inline normal - adjust exponent bias from 2-bit bias 1 to
+             * the IEEE 754 bias then left-justify the mantissa. */
+            vp_exp = f32_exp_bias + vf_exp - 1;
+            vp_man = (u32)vf_man << (f32_mant_size - 4);
+        }
+    }
+    /* out-of-line little-endian exponent and mantissa */
+    else {
+        size_t lz = clz(vr_man);
+        if (vr_exp <= -(s32)f32_exp_bias) {
+            /* normal to subnormal - calculate shift using exponent delta
+             * then left-justify the mantissa preserving the leading 1. */
+            assert(vr_exp >= -(s32)f32_exp_bias - f32_mant_size);
+            size_t sh = f32_exp_bias + vr_exp + (u32)lz - f32_exp_size;
+            vp_exp = 0;
+            vp_man = (u32)vr_man << sh;
+        } else {
+            /* normal - if no exponent, mantissa is an integer so calculate
+             * exponent from the leading zero count otherwise copy exponent
+             * then left-justify the mantissa and truncate the leading 1. */
+            vp_exp = f32_exp_bias + (vf_exp == 0 ? 31 - (u32)lz : vr_exp);
+            vp_man = (u32)vr_man << (lz + 1) >> (f32_exp_size + 1);
+        }
+    }
+
+    v = f32_pack_float(f32_struct{vp_man, (u32)vp_exp, vf_sgn});
+
+#if DEBUG_ENCODING
+    _vf_f32_debug(v, pre, vp_exp - f32_exp_bias, vp_man << 9, vr_exp, vr_man);
+#endif
+
+    return f32_result { v, 0 };
+}
+
+int vf_f32_write(vf_buf *buf, const float *value)
+{
+    s8 pre;
+    float v = *value;
+    vf_f32_data d = vf_f32_data_get(v);
+    int vf_exp = 0;
+    int vf_man = 0;
+    u32 vw_man = 0;
+    s32 vw_exp = 0;
+
+    // Inf/NaN
+    if (d.sexp == f32_exp_bias + 1) {
+        vf_exp = 3;
+        vf_man = (d.frac != 0) << 3;
+        pre = 0x80 | (d.sign << 6) | (vf_exp << 4) | vf_man;
+    }
+    // Zero
+    else if (d.sexp == -(s32)f32_exp_bias && d.frac == 0) {
+        pre = 0x80 | (d.sign << 6);
+    }
+    // Inline (normal)
+    else if (d.sexp <= 1 && d.sexp >= 0 &&
+             (d.frac & u32_msn) == d.frac) {
+        pre = 0x80 | (d.sign << 6) | (u8)((d.sexp+1) << 4) | (u8)(d.frac >> 28);
+    }
+    // Inline (subnormal)
+    else if (d.sexp <= -1 && d.sexp >= -4 &&
+             ((d.frac >> -d.sexp) & u32_msn) == (d.frac >> -d.sexp)) {
+        pre = 0x80 | (d.sign << 6) | (u8)((0x10 | (d.frac >> 28)) >> -d.sexp);
+    }
+    // Out-of-line
+    else {
+        /*
+         * 1. renormalize subnormal fraction (leading one preserved)
+         * 2. omit fraction for powers of two (fraction is zero).
+         * 3. omit exponent for integers (no fraction bits right of point).
+         * 4. otherwise encode both exponent and fraction
+         */
+        if (d.sexp == -(s32)f32_exp_bias) {
+            size_t sh = ctz(d.frac), lz = clz(d.frac);
+            vw_man = d.frac >> sh;
+            vw_exp = d.sexp - (u32)lz - 1;
+            vf_exp = (u8)vf_le_ber_integer_s64_length_byval(vw_exp);
+            vf_man = (u8)vf_le_ber_integer_u64_length_byval(vw_man);
+            pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
+        }
+        else if (d.sexp >= 0 && d.sexp < 32 && d.frac > 0 && (d.frac << d.sexp) == 0) {
+            size_t sh = 32 - d.sexp;
+            vw_man = (d.frac >> sh) | (u32_msb >> (sh - 1));
+            vf_man = (u8)vf_le_ber_integer_u64_length_byval(vw_man);
+            pre = (d.sign << 6) | vf_man;
+        }
+        else if (d.frac == 0) {
+            vw_exp = d.sexp;
+            vf_exp = (u8)vf_le_ber_integer_s64_length_byval(vw_exp);
+            pre = (d.sign << 6) | (vf_exp << 4);
+        }
+        else {
+            size_t sh = ctz(d.frac);
+            vw_man = (d.frac >> sh) | (u32_msb >> (sh - 1));
+            vw_exp = d.sexp;
+            vf_exp = (u8)vf_le_ber_integer_s64_length_byval(vw_exp);
+            vf_man = (u8)vf_le_ber_integer_u64_length_byval(vw_man);
+            pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
+        }
+        /* vf_exp and vf_man contain length of exponent and fraction in bytes */
+    }
+
+    if (vf_buf_write_i8(buf, pre) != 1) {
+        return -1;
+    }
+
+    if ((pre & 0x80) == 0) {
+        if (vf_exp && vf_le_ber_integer_s64_write_byval(buf, vf_exp, vw_exp) < 0) {
+            return -1;
+        }
+        if (vf_man && vf_le_ber_integer_u64_write_byval(buf, vf_man, vw_man) < 0) {
+            return -1;
+        }
+    }
+
+#if DEBUG_ENCODING
+    _vf_f32_debug(v, pre, d.sexp, d.frac, vw_exp, vw_man);
+#endif
+
+    return 0;
+}
+
+int vf_f32_write_byval(vf_buf *buf, const float value)
+{
+    s8 pre;
+    const float v = value;
+    vf_f32_data d = vf_f32_data_get(v);
+    int vf_exp = 0;
+    int vf_man = 0;
+    u32 vw_man = 0;
+    s32 vw_exp = 0;
+
+    // Inf/NaN
+    if (d.sexp == f32_exp_bias + 1) {
+        vf_exp = 3;
+        vf_man = (d.frac != 0) << 3;
+        pre = 0x80 | (d.sign << 6) | (vf_exp << 4) | vf_man;
+    }
+    // Zero
+    else if (d.sexp == -(s32)f32_exp_bias && d.frac == 0) {
+        pre = 0x80 | (d.sign << 6);
+    }
+    // Inline (normal)
+    else if (d.sexp <= 1 && d.sexp >= 0 &&
+             (d.frac & u32_msn) == d.frac) {
+        pre = 0x80 | (d.sign << 6) | (u8)((d.sexp+1) << 4) | (u8)(d.frac >> 28);
+    }
+    // Inline (subnormal)
+    else if (d.sexp <= -1 && d.sexp >= -4 &&
+             ((d.frac >> -d.sexp) & u32_msn) == (d.frac >> -d.sexp)) {
+        pre = 0x80 | (d.sign << 6) | (u8)((0x10 | (d.frac >> 28)) >> -d.sexp);
+    }
+    // Out-of-line
+    else {
+        /*
+         * 1. renormalize subnormal fraction (leading one preserved)
+         * 2. omit fraction for powers of two (fraction is zero).
+         * 3. omit exponent for integers (no fraction bits right of point).
+         * 4. otherwise encode both exponent and fraction
+         */
+        if (d.sexp == -(s32)f32_exp_bias) {
+            size_t sh = ctz(d.frac), lz = clz(d.frac);
+            vw_man = d.frac >> sh;
+            vw_exp = d.sexp - (u32)lz - 1;
+            vf_exp = (u8)vf_le_ber_integer_s64_length_byval(vw_exp);
+            vf_man = (u8)vf_le_ber_integer_u64_length_byval(vw_man);
+            pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
+        }
+        else if (d.sexp >= 0 && d.sexp < 32 && d.frac > 0 && (d.frac << d.sexp) == 0) {
+            size_t sh = 32 - d.sexp;
+            vw_man = (d.frac >> sh) | (u32_msb >> (sh - 1));
+            vf_man = (u8)vf_le_ber_integer_u64_length_byval(vw_man);
+            pre = (d.sign << 6) | vf_man;
+        }
+        else if (d.frac == 0) {
+            vw_exp = d.sexp;
+            vf_exp = (u8)vf_le_ber_integer_s64_length_byval(vw_exp);
+            pre = (d.sign << 6) | (vf_exp << 4);
+        }
+        else {
+            size_t sh = ctz(d.frac);
+            vw_man = (d.frac >> sh) | (u32_msb >> (sh - 1));
+            vw_exp = d.sexp;
+            vf_exp = (u8)vf_le_ber_integer_s64_length_byval(vw_exp);
+            vf_man = (u8)vf_le_ber_integer_u64_length_byval(vw_man);
+            pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
+        }
+        /* vf_exp and vf_man contain length of exponent and fraction in bytes */
+    }
+
+    if (vf_buf_write_i8(buf, pre) != 1) {
+        return -1;
+    }
+
+    if ((pre & 0x80) == 0) {
+        if (vf_exp && vf_le_ber_integer_s64_write_byval(buf, vf_exp, vw_exp) < 0) {
+            return -1;
+        }
+        if (vf_man && vf_le_ber_integer_u64_write_byval(buf, vf_man, vw_man) < 0) {
+            return -1;
+        }
+    }
+
+#if DEBUG_ENCODING
+    _vf_f32_debug(v, pre, d.sexp, d.frac, vw_exp, vw_man);
+#endif
+
+    return 0;
+}
+
+/*
+ * LEB128
+ */
 
 int leb_u64_read(vf_buf *buf, u64 *value)
 {
@@ -1717,6 +2160,10 @@ int leb_u64_write_byval(vf_buf *buf, const u64 value)
 
     return 0;
 }
+
+/*
+ * VLU
+ */
 
 int vlu_u64_read(vf_buf *buf, u64 *value)
 {
