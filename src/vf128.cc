@@ -1468,27 +1468,27 @@ int vf8_f64_write(vf8_buf *buf, const double *value)
             size_t sh = ctz(d.frac), lz = clz(d.frac);
             vw_man = d.frac >> sh;
             vw_exp = d.sexp - lz - 1;
-            vf_exp = vf8_le_ber_integer_s64_length(&vw_exp);
-            vf_man = vf8_le_ber_integer_u64_length(&vw_man);
+            vf_exp = vf8_le_ber_integer_s64_length_byval(vw_exp);
+            vf_man = vf8_le_ber_integer_u64_length_byval(vw_man);
             pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
         }
         else if (d.sexp >= 0 && d.sexp < 64 && d.frac > 0 && (d.frac << d.sexp) == 0) {
             size_t sh = 64 - d.sexp;
             vw_man = (d.frac >> sh) | (u64_msb >> (sh - 1));
-            vf_man = vf8_le_ber_integer_u64_length(&vw_man);
+            vf_man = vf8_le_ber_integer_u64_length_byval(vw_man);
             pre = (d.sign << 6) | vf_man;
         }
         else if (d.frac == 0) {
             vw_exp = d.sexp;
-            vf_exp = vf8_le_ber_integer_s64_length(&vw_exp);
+            vf_exp = vf8_le_ber_integer_s64_length_byval(vw_exp);
             pre = (d.sign << 6) | (vf_exp << 4);
         }
         else {
             size_t sh = ctz(d.frac);
             vw_man = (d.frac >> sh) | (u64_msb >> (sh - 1));
             vw_exp = d.sexp;
-            vf_exp = vf8_le_ber_integer_s64_length(&vw_exp);
-            vf_man = vf8_le_ber_integer_u64_length(&vw_man);
+            vf_exp = vf8_le_ber_integer_s64_length_byval(vw_exp);
+            vf_man = vf8_le_ber_integer_u64_length_byval(vw_man);
             pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
         }
         /* vf_exp and vf_man contain length of exponent and fraction in bytes */
@@ -1499,10 +1499,10 @@ int vf8_f64_write(vf8_buf *buf, const double *value)
     }
 
     if ((pre & 0x80) == 0) {
-        if (vf_exp && vf8_le_ber_integer_s64_write(buf, vf_exp, &vw_exp) < 0) {
+        if (vf_exp && vf8_le_ber_integer_s64_write_byval(buf, vf_exp, vw_exp) < 0) {
             return -1;
         }
-        if (vf_man && vf8_le_ber_integer_u64_write(buf, vf_man, &vw_man) < 0) {
+        if (vf_man && vf8_le_ber_integer_u64_write_byval(buf, vf_man, vw_man) < 0) {
             return -1;
         }
     }
