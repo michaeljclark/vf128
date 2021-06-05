@@ -39,10 +39,10 @@ void vf8_buf_destroy(vf8_buf* buf)
 void vf8_buf_dump(vf8_buf *buf)
 {
     intptr_t stride = 16;
-    for (intptr_t i = 0; i < buf->data_offset; i += stride) {
+    for (intptr_t i = 0; i < (intptr_t)buf->data_offset; i += stride) {
         printf("      ");
         for (intptr_t j = i+stride-1; j >= i; j--) {
-            if (j >= buf->data_offset) printf("     ");
+            if (j >= (intptr_t)buf->data_offset) printf("     ");
             else printf(" 0x%02hhX", buf->data[j]);
         }
         printf("\n%04zX: ", i & 0xffff);
@@ -50,7 +50,7 @@ void vf8_buf_dump(vf8_buf *buf)
             const char arr[4][4] = { "▄", "▟", "▙", "█" };
             printf(" ");
             for (intptr_t i = 6; i >= 0; i-=2) {
-                if (j < buf->data_offset) {
+                if (j < (intptr_t)buf->data_offset) {
                     printf("%s", arr[(buf->data[j]>>i) & 3]);
                 } else {
                     printf("░");
@@ -1443,18 +1443,18 @@ int vf8_f64_write(vf8_buf *buf, const double *value)
         pre = 0x80 | (d.sign << 6) | (vf_exp << 4) | vf_man;
     }
     // Zero
-    else if (d.sexp == -f64_exp_bias && d.frac == 0) {
+    else if (d.sexp == -(s64)f64_exp_bias && d.frac == 0) {
         pre = 0x80 | (d.sign << 6);
     }
     // Inline (normal)
     else if (d.sexp <= 1 && d.sexp >= 0 &&
              (d.frac & u64_msn) == d.frac) {
-        pre = 0x80 | (d.sign << 6) | ((d.sexp + 1) << 4) | (d.frac >> 60);
+        pre = 0x80 | (d.sign << 6) | (u8)((d.sexp+1) << 4) | (u8)(d.frac >> 60);
     }
     // Inline (subnormal)
     else if (d.sexp <= -1 && d.sexp >= -4 &&
              ((d.frac >> -d.sexp) & u64_msn) == (d.frac >> -d.sexp)) {
-        pre = 0x80 | (d.sign << 6) | ((0x10 | (d.frac >> 60)) >> -d.sexp);
+        pre = 0x80 | (d.sign << 6) | (u8)((0x10 | (d.frac >> 60)) >> -d.sexp);
     }
     // Out-of-line
     else {
@@ -1464,31 +1464,31 @@ int vf8_f64_write(vf8_buf *buf, const double *value)
          * 3. omit exponent for integers (no fraction bits right of point).
          * 4. otherwise encode both exponent and fraction
          */
-        if (d.sexp == -f64_exp_bias) {
+        if (d.sexp == -(s64)f64_exp_bias) {
             size_t sh = ctz(d.frac), lz = clz(d.frac);
             vw_man = d.frac >> sh;
             vw_exp = d.sexp - lz - 1;
-            vf_exp = vf8_le_ber_integer_s64_length_byval(vw_exp);
-            vf_man = vf8_le_ber_integer_u64_length_byval(vw_man);
+            vf_exp = (u8)vf8_le_ber_integer_s64_length_byval(vw_exp);
+            vf_man = (u8)vf8_le_ber_integer_u64_length_byval(vw_man);
             pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
         }
         else if (d.sexp >= 0 && d.sexp < 64 && d.frac > 0 && (d.frac << d.sexp) == 0) {
             size_t sh = 64 - d.sexp;
             vw_man = (d.frac >> sh) | (u64_msb >> (sh - 1));
-            vf_man = vf8_le_ber_integer_u64_length_byval(vw_man);
+            vf_man = (u8)vf8_le_ber_integer_u64_length_byval(vw_man);
             pre = (d.sign << 6) | vf_man;
         }
         else if (d.frac == 0) {
             vw_exp = d.sexp;
-            vf_exp = vf8_le_ber_integer_s64_length_byval(vw_exp);
+            vf_exp = (u8)vf8_le_ber_integer_s64_length_byval(vw_exp);
             pre = (d.sign << 6) | (vf_exp << 4);
         }
         else {
             size_t sh = ctz(d.frac);
             vw_man = (d.frac >> sh) | (u64_msb >> (sh - 1));
             vw_exp = d.sexp;
-            vf_exp = vf8_le_ber_integer_s64_length_byval(vw_exp);
-            vf_man = vf8_le_ber_integer_u64_length_byval(vw_man);
+            vf_exp = (u8)vf8_le_ber_integer_s64_length_byval(vw_exp);
+            vf_man = (u8)vf8_le_ber_integer_u64_length_byval(vw_man);
             pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
         }
         /* vf_exp and vf_man contain length of exponent and fraction in bytes */
@@ -1531,18 +1531,18 @@ int vf8_f64_write_byval(vf8_buf *buf, const double value)
         pre = 0x80 | (d.sign << 6) | (vf_exp << 4) | vf_man;
     }
     // Zero
-    else if (d.sexp == -f64_exp_bias && d.frac == 0) {
+    else if (d.sexp == -(s64)f64_exp_bias && d.frac == 0) {
         pre = 0x80 | (d.sign << 6);
     }
     // Inline (normal)
     else if (d.sexp <= 1 && d.sexp >= 0 &&
              (d.frac & u64_msn) == d.frac) {
-        pre = 0x80 | (d.sign << 6) | ((d.sexp + 1) << 4) | (d.frac >> 60);
+        pre = 0x80 | (d.sign << 6) | (u8)((d.sexp+1) << 4) | (u8)(d.frac >> 60);
     }
     // Inline (subnormal)
     else if (d.sexp <= -1 && d.sexp >= -4 &&
              ((d.frac >> -d.sexp) & u64_msn) == (d.frac >> -d.sexp)) {
-        pre = 0x80 | (d.sign << 6) | ((0x10 | (d.frac >> 60)) >> -d.sexp);
+        pre = 0x80 | (d.sign << 6) | (u8)((0x10 | (d.frac >> 60)) >> -d.sexp);
     }
     // Out-of-line
     else {
@@ -1552,31 +1552,31 @@ int vf8_f64_write_byval(vf8_buf *buf, const double value)
          * 3. omit exponent for integers (no fraction bits right of point).
          * 4. otherwise encode both exponent and fraction
          */
-        if (d.sexp == -f64_exp_bias) {
+        if (d.sexp == -(s64)f64_exp_bias) {
             size_t sh = ctz(d.frac), lz = clz(d.frac);
             vw_man = d.frac >> sh;
             vw_exp = d.sexp - lz - 1;
-            vf_exp = vf8_le_ber_integer_s64_length_byval(vw_exp);
-            vf_man = vf8_le_ber_integer_u64_length_byval(vw_man);
+            vf_exp = (u8)vf8_le_ber_integer_s64_length_byval(vw_exp);
+            vf_man = (u8)vf8_le_ber_integer_u64_length_byval(vw_man);
             pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
         }
         else if (d.sexp >= 0 && d.sexp < 64 && d.frac > 0 && (d.frac << d.sexp) == 0) {
             size_t sh = 64 - d.sexp;
             vw_man = (d.frac >> sh) | (u64_msb >> (sh - 1));
-            vf_man = vf8_le_ber_integer_u64_length_byval(vw_man);
+            vf_man = (u8)vf8_le_ber_integer_u64_length_byval(vw_man);
             pre = (d.sign << 6) | vf_man;
         }
         else if (d.frac == 0) {
             vw_exp = d.sexp;
-            vf_exp = vf8_le_ber_integer_s64_length_byval(vw_exp);
+            vf_exp = (u8)vf8_le_ber_integer_s64_length_byval(vw_exp);
             pre = (d.sign << 6) | (vf_exp << 4);
         }
         else {
             size_t sh = ctz(d.frac);
             vw_man = (d.frac >> sh) | (u64_msb >> (sh - 1));
             vw_exp = d.sexp;
-            vf_exp = vf8_le_ber_integer_s64_length_byval(vw_exp);
-            vf_man = vf8_le_ber_integer_u64_length_byval(vw_man);
+            vf_exp = (u8)vf8_le_ber_integer_s64_length_byval(vw_exp);
+            vf_man = (u8)vf8_le_ber_integer_u64_length_byval(vw_man);
             pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
         }
         /* vf_exp and vf_man contain length of exponent and fraction in bytes */
