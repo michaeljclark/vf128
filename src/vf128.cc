@@ -18,9 +18,9 @@
  * buffer implementation
  */
 
-vf8_buf* vf8_buf_new(size_t size)
+vf_buf* vf_buf_new(size_t size)
 {
-    vf8_buf *buf = (vf8_buf*)malloc(sizeof(vf8_buf));
+    vf_buf *buf = (vf_buf*)malloc(sizeof(vf_buf));
 
     buf->data_offset = 0;
     buf->data_size = size;
@@ -30,13 +30,13 @@ vf8_buf* vf8_buf_new(size_t size)
     return buf;
 }
 
-void vf8_buf_destroy(vf8_buf* buf)
+void vf_buf_destroy(vf_buf* buf)
 {
     free(buf->data);
     free(buf);
 }
 
-void vf8_buf_dump(vf8_buf *buf)
+void vf_buf_dump(vf_buf *buf)
 {
     intptr_t stride = 16;
     for (intptr_t i = 0; i < (intptr_t)buf->data_offset; i += stride) {
@@ -82,19 +82,19 @@ void vf8_buf_dump(vf8_buf *buf)
  * called by ident_read | ident_write if low tag == 0b11111
  */
 
-size_t vf8_asn1_ber_tag_length(u64 tag)
+size_t vf_asn1_ber_tag_length(u64 tag)
 {
     return tag == 0 ? 1 : 8 - ((clz(tag) - 1) / 7) + 1;
 }
 
-int vf8_asn1_ber_tag_read(vf8_buf *buf, u64 *tag)
+int vf_asn1_ber_tag_read(vf_buf *buf, u64 *tag)
 {
     int8_t b;
     size_t w = 0;
     u64 l = 0;
 
     do {
-        if (vf8_buf_read_i8(buf, &b) != 1) {
+        if (vf_buf_read_i8(buf, &b) != 1) {
             goto err;
         }
         l <<= 7;
@@ -113,7 +113,7 @@ err:
     return -1;
 }
 
-int vf8_asn1_ber_tag_write(vf8_buf *buf, u64 tag)
+int vf_asn1_ber_tag_write(vf_buf *buf, u64 tag)
 {
     int8_t b;
     size_t llen;
@@ -123,13 +123,13 @@ int vf8_asn1_ber_tag_write(vf8_buf *buf, u64 tag)
         return -1;
     }
 
-    llen = vf8_asn1_ber_tag_length(tag);
+    llen = vf_asn1_ber_tag_length(tag);
     l = tag << (64 - llen * 7);
     for (size_t i = 0; i < llen; i++) {
         b = ((l >> 57) & 0x7f);
         b |= (i != llen - 1) << 7;
         l <<= 7;
-        if (vf8_buf_write_i8(buf, b) != 1) {
+        if (vf_buf_write_i8(buf, b) != 1) {
             return -1;
         }
     }
@@ -143,18 +143,18 @@ int vf8_asn1_ber_tag_write(vf8_buf *buf, u64 tag)
  * read and write identifier
  */
 
-size_t vf8_asn1_ber_ident_length(asn1_id _id)
+size_t vf_asn1_ber_ident_length(asn1_id _id)
 {
     return 1 + ((_id._identifier >= 0x1f) ?
-        vf8_asn1_ber_tag_length(_id._identifier) : 0);
+        vf_asn1_ber_tag_length(_id._identifier) : 0);
 }
 
-int vf8_asn1_ber_ident_read(vf8_buf *buf, asn1_id *_id)
+int vf_asn1_ber_ident_read(vf_buf *buf, asn1_id *_id)
 {
     int8_t b;
     asn1_id r = { 0 };
 
-    if (vf8_buf_read_i8(buf, &b) != 1) {
+    if (vf_buf_read_i8(buf, &b) != 1) {
         return -1;;
     }
 
@@ -164,7 +164,7 @@ int vf8_asn1_ber_ident_read(vf8_buf *buf, asn1_id *_id)
 
     if (_id->_identifier == 0x1f) {
         u64 ber_tag;
-        if (vf8_asn1_ber_tag_read(buf, &ber_tag) < 0) {
+        if (vf_asn1_ber_tag_read(buf, &ber_tag) < 0) {
             return -1;
         }
         if (ber_tag < 0x1f) {
@@ -176,7 +176,7 @@ int vf8_asn1_ber_ident_read(vf8_buf *buf, asn1_id *_id)
     return 0;
 }
 
-int vf8_asn1_ber_ident_write(vf8_buf *buf, asn1_id _id)
+int vf_asn1_ber_ident_write(vf_buf *buf, asn1_id _id)
 {
     int8_t b;
 
@@ -184,12 +184,12 @@ int vf8_asn1_ber_ident_write(vf8_buf *buf, asn1_id _id)
         ( (u8)(_id._constructed & 0x01) << 5 ) |
         ( (u8)(_id._identifier < 0x1f ? _id._identifier : 0x1f) );
 
-    if (vf8_buf_write_i8(buf, b) != 1) {
+    if (vf_buf_write_i8(buf, b) != 1) {
         return -1;
     }
 
     if (_id._identifier >= 0x1f) {
-        if (vf8_asn1_ber_tag_write(buf, _id._identifier) < 0) {
+        if (vf_asn1_ber_tag_write(buf, _id._identifier) < 0) {
             return -1;
         }
     }
@@ -203,18 +203,18 @@ int vf8_asn1_ber_ident_write(vf8_buf *buf, asn1_id _id)
  * read and write 64-bit length
  */
 
-size_t vf8_asn1_ber_length_length(u64 length)
+size_t vf_asn1_ber_length_length(u64 length)
 {
     return 1 + ((length >= 0x80) ? 8 - (clz(length) / 8) : 0);
 }
 
-int vf8_asn1_ber_length_read(vf8_buf *buf, u64 *length)
+int vf_asn1_ber_length_read(vf_buf *buf, u64 *length)
 {
     int8_t b;
     size_t llen = 0;
     u64 l = 0;
 
-    if (vf8_buf_read_i8(buf, &b) != 1) {
+    if (vf_buf_read_i8(buf, &b) != 1) {
         goto err;
     }
     if ((b & 0x80) == 0) {
@@ -230,7 +230,7 @@ int vf8_asn1_ber_length_read(vf8_buf *buf, u64 *length)
         goto err;
     }
     for (size_t i = 0; i < llen; i++) {
-        if (vf8_buf_read_i8(buf, &b) != 1) {
+        if (vf_buf_read_i8(buf, &b) != 1) {
             goto err;
         }
         l <<= 8;
@@ -245,7 +245,7 @@ err:
     return -1;
 }
 
-int vf8_asn1_ber_length_write(vf8_buf *buf, u64 length)
+int vf_asn1_ber_length_write(vf_buf *buf, u64 length)
 {
     int8_t b;
     size_t llen;
@@ -253,7 +253,7 @@ int vf8_asn1_ber_length_write(vf8_buf *buf, u64 length)
 
     if (length <= 0x7f) {
         b = (int8_t)length;
-        if (vf8_buf_write_i8(buf, b) != 1) {
+        if (vf_buf_write_i8(buf, b) != 1) {
             return -1;
         }
         return 0;
@@ -262,7 +262,7 @@ int vf8_asn1_ber_length_write(vf8_buf *buf, u64 length)
 
     llen = 8 - (clz(length) / 8);
     b = (u8)llen | (u8)0x80;
-    if (vf8_buf_write_i8(buf, b) != 1) {
+    if (vf_buf_write_i8(buf, b) != 1) {
         return -1;
     }
 
@@ -270,7 +270,7 @@ int vf8_asn1_ber_length_write(vf8_buf *buf, u64 length)
     for (size_t i = 0; i < llen; i++) {
         b = (l >> 56) & 0xff;
         l <<= 8;
-        if (vf8_buf_write_i8(buf, b) != 1) {
+        if (vf_buf_write_i8(buf, b) != 1) {
             return -1;
         }
     }
@@ -284,17 +284,17 @@ int vf8_asn1_ber_length_write(vf8_buf *buf, u64 length)
  * read and write integer
  */
 
-size_t vf8_asn1_ber_integer_u64_length(const u64 *value)
+size_t vf_asn1_ber_integer_u64_length(const u64 *value)
 {
     return *value == 0 ? 1 : 8 - (clz(*value) / 8);
 }
 
-size_t vf8_asn1_ber_integer_u64_length_byval(const u64 value)
+size_t vf_asn1_ber_integer_u64_length_byval(const u64 value)
 {
     return value == 0 ? 1 : 8 - (clz(value) / 8);
 }
 
-int vf8_asn1_ber_integer_u64_read(vf8_buf *buf, size_t len, u64 *value)
+int vf_asn1_ber_integer_u64_read(vf_buf *buf, size_t len, u64 *value)
 {
     u64 v = 0, o = 0;
     size_t shift = (64 - len * 8);
@@ -302,7 +302,7 @@ int vf8_asn1_ber_integer_u64_read(vf8_buf *buf, size_t len, u64 *value)
     if (len > 8) {
         goto err;
     }
-    if (vf8_buf_read_bytes(buf, (char*)&o, len) != len) {
+    if (vf_buf_read_bytes(buf, (char*)&o, len) != len) {
         goto err;
     }
 
@@ -319,7 +319,7 @@ err:
     return -1;
 }
 
-u64_result vf8_asn1_ber_integer_u64_read_byval(vf8_buf *buf, size_t len)
+u64_result vf_asn1_ber_integer_u64_read_byval(vf_buf *buf, size_t len)
 {
     u64 v = 0, o = 0;
     size_t shift = (64 - len * 8);
@@ -327,7 +327,7 @@ u64_result vf8_asn1_ber_integer_u64_read_byval(vf8_buf *buf, size_t len)
     if (len > 8) {
         return { 0, -1 };
     }
-    if (vf8_buf_read_bytes(buf, (char*)&o, len) != len) {
+    if (vf_buf_read_bytes(buf, (char*)&o, len) != len) {
         return { 0, -1 };
     }
 
@@ -340,7 +340,7 @@ u64_result vf8_asn1_ber_integer_u64_read_byval(vf8_buf *buf, size_t len)
     return { v, 0 };
 }
 
-int vf8_asn1_ber_integer_u64_write(vf8_buf *buf, size_t len, const u64 *value)
+int vf_asn1_ber_integer_u64_write(vf_buf *buf, size_t len, const u64 *value)
 {
     u64 v = 0, o = 0;
     size_t shift = (64 - len * 8);
@@ -355,14 +355,14 @@ int vf8_asn1_ber_integer_u64_write(vf8_buf *buf, size_t len, const u64 *value)
     o = be64(*value) >> shift;
 #endif
 
-    if (vf8_buf_write_bytes(buf, (const char*)&o, len) != len) {
+    if (vf_buf_write_bytes(buf, (const char*)&o, len) != len) {
         return -1;
     }
 
     return 0;
 }
 
-int vf8_asn1_ber_integer_u64_write_byval(vf8_buf *buf, size_t len, const u64 value)
+int vf_asn1_ber_integer_u64_write_byval(vf_buf *buf, size_t len, const u64 value)
 {
     u64 v = 0, o = 0;
     size_t shift = (64 - len * 8);
@@ -377,7 +377,7 @@ int vf8_asn1_ber_integer_u64_write_byval(vf8_buf *buf, size_t len, const u64 val
     o = be64(value) >> shift;
 #endif
 
-    if (vf8_buf_write_bytes(buf, (const char*)&o, len) != len) {
+    if (vf_buf_write_bytes(buf, (const char*)&o, len) != len) {
         return -1;
     }
 
@@ -389,17 +389,17 @@ int vf8_asn1_ber_integer_u64_write_byval(vf8_buf *buf, size_t len, const u64 val
  * read and write integer
  */
 
-size_t vf8_le_ber_integer_u64_length(const u64 *value)
+size_t vf_le_ber_integer_u64_length(const u64 *value)
 {
     return *value == 0 ? 1 : 8 - (clz(*value) / 8);
 }
 
-size_t vf8_le_ber_integer_u64_length_byval(const u64 value)
+size_t vf_le_ber_integer_u64_length_byval(const u64 value)
 {
     return value == 0 ? 1 : 8 - (clz(value) / 8);
 }
 
-int vf8_le_ber_integer_u64_read(vf8_buf *buf, size_t len, u64 *value)
+int vf_le_ber_integer_u64_read(vf_buf *buf, size_t len, u64 *value)
 {
     u64 v = 0, o = 0;
 
@@ -410,11 +410,11 @@ int vf8_le_ber_integer_u64_read(vf8_buf *buf, size_t len, u64 *value)
 #if USE_UNALIGNED_ACCESSES
     *value = 0;
     /* unaligned accesses are enabled on little-endian targets */
-    if (vf8_buf_read_bytes(buf, (char*)value, len) != len) {
+    if (vf_buf_read_bytes(buf, (char*)value, len) != len) {
         goto err;
     }
 #else
-    if (vf8_buf_read_bytes(buf, (char*)&o, len) != len) {
+    if (vf_buf_read_bytes(buf, (char*)&o, len) != len) {
         goto err;
     }
 
@@ -426,7 +426,7 @@ err:
     return -1;
 }
 
-u64_result vf8_le_ber_integer_u64_read_byval(vf8_buf *buf, size_t len)
+u64_result vf_le_ber_integer_u64_read_byval(vf_buf *buf, size_t len)
 {
     u64 v = 0, o = 0;
 
@@ -434,14 +434,14 @@ u64_result vf8_le_ber_integer_u64_read_byval(vf8_buf *buf, size_t len)
         return u64_result { 0, -1 };
     }
 
-    if (vf8_buf_read_bytes(buf, (char*)&o, len) != len) {
+    if (vf_buf_read_bytes(buf, (char*)&o, len) != len) {
         return u64_result { 0, -1 };
     }
 
     return u64_result { le64(o), 0 };
 }
 
-int vf8_le_ber_integer_u64_write(vf8_buf *buf, size_t len, const u64 *value)
+int vf_le_ber_integer_u64_write(vf_buf *buf, size_t len, const u64 *value)
 {
     u64 v = 0, o = 0;
 
@@ -451,13 +451,13 @@ int vf8_le_ber_integer_u64_write(vf8_buf *buf, size_t len, const u64 *value)
 
 #if USE_UNALIGNED_ACCESSES
     /* unaligned accesses are enabled on little-endian targets */
-    if (vf8_buf_write_bytes(buf, (const char*)value, len) != len) {
+    if (vf_buf_write_bytes(buf, (const char*)value, len) != len) {
         return -1;
     }
 #else
     o = le64(*value);
 
-    if (vf8_buf_write_bytes(buf, (const char*)&o, len) != len) {
+    if (vf_buf_write_bytes(buf, (const char*)&o, len) != len) {
         return -1;
     }
 #endif
@@ -465,7 +465,7 @@ int vf8_le_ber_integer_u64_write(vf8_buf *buf, size_t len, const u64 *value)
     return 0;
 }
 
-int vf8_le_ber_integer_u64_write_byval(vf8_buf *buf, size_t len, const u64 value)
+int vf_le_ber_integer_u64_write_byval(vf_buf *buf, size_t len, const u64 value)
 {
     u64 v = 0, o = 0;
 
@@ -475,7 +475,7 @@ int vf8_le_ber_integer_u64_write_byval(vf8_buf *buf, size_t len, const u64 value
 
     o = le64(value);
 
-    if (vf8_buf_write_bytes(buf, (const char*)&o, len) != len) {
+    if (vf_buf_write_bytes(buf, (const char*)&o, len) != len) {
         return -1;
     }
 
@@ -493,13 +493,13 @@ int vf8_le_ber_integer_u64_write_byval(vf8_buf *buf, size_t len, const u64 value
  * - 0xffffffffffffff80 -> 0x80
  * - 0xffffffffffffff7f -> 0xff7f
  */
-size_t vf8_asn1_ber_integer_s64_length(const s64 *value)
+size_t vf_asn1_ber_integer_s64_length(const s64 *value)
 {
     const s64 v = *value;
     return v == 0 ? 1 : 8 - ((clz(v < 0 ? ~v : v)-1) / 8);
 }
 
-size_t vf8_asn1_ber_integer_s64_length_byval(const s64 value)
+size_t vf_asn1_ber_integer_s64_length_byval(const s64 value)
 {
     const s64 v = value;
     return v == 0 ? 1 : 8 - ((clz(v < 0 ? ~v : v)-1) / 8);
@@ -507,150 +507,150 @@ size_t vf8_asn1_ber_integer_s64_length_byval(const s64 value)
 
 static s64 _sign_extend_s64(s64 x, size_t y) { return ((s64)(x << y)) >> y; }
 
-int vf8_asn1_ber_integer_s64_read(vf8_buf *buf, size_t len, s64 *value)
+int vf_asn1_ber_integer_s64_read(vf_buf *buf, size_t len, s64 *value)
 {
-    int ret = vf8_asn1_ber_integer_u64_read(buf, len, (u64*)value);
+    int ret = vf_asn1_ber_integer_u64_read(buf, len, (u64*)value);
     if (ret == 0) {
         *value = _sign_extend_s64(*value, 64-(len << 3));
     }
     return ret;
 }
 
-s64_result vf8_asn1_ber_integer_s64_read_byval(vf8_buf *buf, size_t len)
+s64_result vf_asn1_ber_integer_s64_read_byval(vf_buf *buf, size_t len)
 {
-    u64_result r = vf8_asn1_ber_integer_u64_read_byval(buf, len);
+    u64_result r = vf_asn1_ber_integer_u64_read_byval(buf, len);
     if (r.error == 0) {
         return s64_result { _sign_extend_s64(r.value, 64-(len << 3)), 0 };
     }
     return s64_result { 0, -1 };
 }
 
-int vf8_asn1_ber_integer_s64_write(vf8_buf *buf, size_t len, const s64 *value)
+int vf_asn1_ber_integer_s64_write(vf_buf *buf, size_t len, const s64 *value)
 {
-    return vf8_asn1_ber_integer_u64_write(buf, len, (const u64*)value);
+    return vf_asn1_ber_integer_u64_write(buf, len, (const u64*)value);
 }
 
-int vf8_asn1_ber_integer_s64_write_byval(vf8_buf *buf, size_t len, const s64 value)
+int vf_asn1_ber_integer_s64_write_byval(vf_buf *buf, size_t len, const s64 value)
 {
-    return vf8_asn1_ber_integer_u64_write_byval(buf, len, (const u64)value);
+    return vf_asn1_ber_integer_u64_write_byval(buf, len, (const u64)value);
 }
 
-size_t vf8_le_ber_integer_s64_length(const s64 *value)
+size_t vf_le_ber_integer_s64_length(const s64 *value)
 {
-    return vf8_asn1_ber_integer_s64_length(value);
+    return vf_asn1_ber_integer_s64_length(value);
 }
 
-size_t vf8_le_ber_integer_s64_length_byval(const s64 value)
+size_t vf_le_ber_integer_s64_length_byval(const s64 value)
 {
-    return vf8_asn1_ber_integer_s64_length_byval(value);
+    return vf_asn1_ber_integer_s64_length_byval(value);
 }
 
-int vf8_le_ber_integer_s64_read(vf8_buf *buf, size_t len, s64 *value)
+int vf_le_ber_integer_s64_read(vf_buf *buf, size_t len, s64 *value)
 {
-    int ret = vf8_le_ber_integer_u64_read(buf, len, (u64*)value);
+    int ret = vf_le_ber_integer_u64_read(buf, len, (u64*)value);
     if (ret == 0) {
         *value = _sign_extend_s64(*value, 64-(len << 3));
     }
     return ret;
 }
 
-s64_result vf8_le_ber_integer_s64_read_byval(vf8_buf *buf, size_t len)
+s64_result vf_le_ber_integer_s64_read_byval(vf_buf *buf, size_t len)
 {
-    u64_result r = vf8_le_ber_integer_u64_read_byval(buf, len);
+    u64_result r = vf_le_ber_integer_u64_read_byval(buf, len);
     if (r.error == 0) {
         return s64_result { _sign_extend_s64(r.value, 64-(len << 3)), 0 };
     }
     return s64_result { 0, -1 };
 }
 
-int vf8_le_ber_integer_s64_write(vf8_buf *buf, size_t len, const s64 *value)
+int vf_le_ber_integer_s64_write(vf_buf *buf, size_t len, const s64 *value)
 {
-    return vf8_le_ber_integer_u64_write(buf, len, (const u64*)value);
+    return vf_le_ber_integer_u64_write(buf, len, (const u64*)value);
 }
 
-int vf8_le_ber_integer_s64_write_byval(vf8_buf *buf, size_t len, const s64 value)
+int vf_le_ber_integer_s64_write_byval(vf_buf *buf, size_t len, const s64 value)
 {
-    return vf8_le_ber_integer_u64_write_byval(buf, len, value);
+    return vf_le_ber_integer_u64_write_byval(buf, len, value);
 }
 
 /*
  * read and write tagged integer
  */
 
-int vf8_asn1_der_integer_u64_read(vf8_buf *buf, asn1_tag _tag, u64 *value)
+int vf_asn1_der_integer_u64_read(vf_buf *buf, asn1_tag _tag, u64 *value)
 {
     asn1_hdr hdr;
-    if (vf8_asn1_ber_ident_read(buf, &hdr._id) < 0) return -1;
-    if (vf8_asn1_ber_length_read(buf, &hdr._length) < 0) return -1;
-    return vf8_asn1_ber_integer_u64_read(buf, hdr._length, value);
+    if (vf_asn1_ber_ident_read(buf, &hdr._id) < 0) return -1;
+    if (vf_asn1_ber_length_read(buf, &hdr._length) < 0) return -1;
+    return vf_asn1_ber_integer_u64_read(buf, hdr._length, value);
 }
 
-u64_result vf8_asn1_der_integer_u64_read_byval(vf8_buf *buf, asn1_tag _tag)
+u64_result vf_asn1_der_integer_u64_read_byval(vf_buf *buf, asn1_tag _tag)
 {
     asn1_hdr hdr;
-    if (vf8_asn1_ber_ident_read(buf, &hdr._id) < 0) return u64_result { 0, -1 };
-    if (vf8_asn1_ber_length_read(buf, &hdr._length) < 0) return u64_result { 0, -1 };
-    return vf8_asn1_ber_integer_u64_read_byval(buf, hdr._length);
+    if (vf_asn1_ber_ident_read(buf, &hdr._id) < 0) return u64_result { 0, -1 };
+    if (vf_asn1_ber_length_read(buf, &hdr._length) < 0) return u64_result { 0, -1 };
+    return vf_asn1_ber_integer_u64_read_byval(buf, hdr._length);
 }
 
-int vf8_asn1_der_integer_u64_write(vf8_buf *buf, asn1_tag _tag, const u64 *value)
+int vf_asn1_der_integer_u64_write(vf_buf *buf, asn1_tag _tag, const u64 *value)
 {
     asn1_hdr hdr = {
-        { (u64)_tag, 0, asn1_class_universal }, vf8_asn1_ber_integer_u64_length(value)
+        { (u64)_tag, 0, asn1_class_universal }, vf_asn1_ber_integer_u64_length(value)
     };
 
-    if (vf8_asn1_ber_ident_write(buf, hdr._id) < 0) return -1;
-    if (vf8_asn1_ber_length_write(buf, hdr._length) < 0) return -1;
-    return vf8_asn1_ber_integer_u64_write(buf, hdr._length, value);
+    if (vf_asn1_ber_ident_write(buf, hdr._id) < 0) return -1;
+    if (vf_asn1_ber_length_write(buf, hdr._length) < 0) return -1;
+    return vf_asn1_ber_integer_u64_write(buf, hdr._length, value);
 }
 
-int vf8_asn1_der_integer_u64_write_byval(vf8_buf *buf, asn1_tag _tag, const u64 value)
+int vf_asn1_der_integer_u64_write_byval(vf_buf *buf, asn1_tag _tag, const u64 value)
 {
     asn1_hdr hdr = {
-        { (u64)_tag, 0, asn1_class_universal }, vf8_asn1_ber_integer_u64_length_byval(value)
+        { (u64)_tag, 0, asn1_class_universal }, vf_asn1_ber_integer_u64_length_byval(value)
     };
 
-    if (vf8_asn1_ber_ident_write(buf, hdr._id) < 0) return -1;
-    if (vf8_asn1_ber_length_write(buf, hdr._length) < 0) return -1;
-    return vf8_asn1_ber_integer_u64_write_byval(buf, hdr._length, value);
+    if (vf_asn1_ber_ident_write(buf, hdr._id) < 0) return -1;
+    if (vf_asn1_ber_length_write(buf, hdr._length) < 0) return -1;
+    return vf_asn1_ber_integer_u64_write_byval(buf, hdr._length, value);
 }
 
-int vf8_asn1_der_integer_s64_read(vf8_buf *buf, asn1_tag _tag, s64 *value)
+int vf_asn1_der_integer_s64_read(vf_buf *buf, asn1_tag _tag, s64 *value)
 {
     asn1_hdr hdr;
-    if (vf8_asn1_ber_ident_read(buf, &hdr._id) < 0) return -1;
-    if (vf8_asn1_ber_length_read(buf, &hdr._length) < 0) return -1;
-    return vf8_asn1_ber_integer_s64_read(buf, hdr._length, value);
+    if (vf_asn1_ber_ident_read(buf, &hdr._id) < 0) return -1;
+    if (vf_asn1_ber_length_read(buf, &hdr._length) < 0) return -1;
+    return vf_asn1_ber_integer_s64_read(buf, hdr._length, value);
 }
 
-s64_result vf8_asn1_der_integer_s64_read_byval(vf8_buf *buf, asn1_tag _tag, s64 *value)
+s64_result vf_asn1_der_integer_s64_read_byval(vf_buf *buf, asn1_tag _tag, s64 *value)
 {
     asn1_hdr hdr;
-    if (vf8_asn1_ber_ident_read(buf, &hdr._id) < 0) return s64_result { 0, -1 };
-    if (vf8_asn1_ber_length_read(buf, &hdr._length) < 0) return s64_result { 0, -1 };
-    return vf8_asn1_ber_integer_s64_read_byval(buf, hdr._length);
+    if (vf_asn1_ber_ident_read(buf, &hdr._id) < 0) return s64_result { 0, -1 };
+    if (vf_asn1_ber_length_read(buf, &hdr._length) < 0) return s64_result { 0, -1 };
+    return vf_asn1_ber_integer_s64_read_byval(buf, hdr._length);
 }
 
-int vf8_asn1_der_integer_s64_write(vf8_buf *buf, asn1_tag _tag, const s64 *value)
+int vf_asn1_der_integer_s64_write(vf_buf *buf, asn1_tag _tag, const s64 *value)
 {
     asn1_hdr hdr = {
-        { (u64)_tag, 0, asn1_class_universal }, vf8_asn1_ber_integer_s64_length(value)
+        { (u64)_tag, 0, asn1_class_universal }, vf_asn1_ber_integer_s64_length(value)
     };
 
-    if (vf8_asn1_ber_ident_write(buf, hdr._id) < 0) return -1;
-    if (vf8_asn1_ber_length_write(buf, hdr._length) < 0) return -1;
-    return vf8_asn1_ber_integer_s64_write(buf, hdr._length, value);
+    if (vf_asn1_ber_ident_write(buf, hdr._id) < 0) return -1;
+    if (vf_asn1_ber_length_write(buf, hdr._length) < 0) return -1;
+    return vf_asn1_ber_integer_s64_write(buf, hdr._length, value);
 }
 
-int vf8_asn1_der_integer_s64_write_byval(vf8_buf *buf, asn1_tag _tag, const s64 value)
+int vf_asn1_der_integer_s64_write_byval(vf_buf *buf, asn1_tag _tag, const s64 value)
 {
     asn1_hdr hdr = {
-        { (u64)_tag, 0, asn1_class_universal }, vf8_asn1_ber_integer_s64_length_byval(value)
+        { (u64)_tag, 0, asn1_class_universal }, vf_asn1_ber_integer_s64_length_byval(value)
     };
 
-    if (vf8_asn1_ber_ident_write(buf, hdr._id) < 0) return -1;
-    if (vf8_asn1_ber_length_write(buf, hdr._length) < 0) return -1;
-    return vf8_asn1_ber_integer_s64_write_byval(buf, hdr._length, value);
+    if (vf_asn1_ber_ident_write(buf, hdr._id) < 0) return -1;
+    if (vf_asn1_ber_length_write(buf, hdr._length) < 0) return -1;
+    return vf_asn1_ber_integer_s64_write_byval(buf, hdr._length, value);
 }
 
 /*
@@ -894,14 +894,14 @@ static f64_real_data f64_asn1_data_get(double value)
 
     return f64_real_data {
         frac, sexp,
-        vf8_asn1_ber_integer_u64_length(&frac),
-        vf8_asn1_ber_integer_s64_length(&sexp),
+        vf_asn1_ber_integer_u64_length(&frac),
+        vf_asn1_ber_integer_s64_length(&sexp),
         !!f64_sign_dec(value), !!f64_is_inf(value),
         !!f64_is_nan(value), !!f64_is_zero(value)
     };
 }
 
-size_t vf8_asn1_ber_real_f64_length(const double *value)
+size_t vf_asn1_ber_real_f64_length(const double *value)
 {
     f64_real_data d = f64_asn1_data_get(*value);
 
@@ -914,7 +914,7 @@ size_t vf8_asn1_ber_real_f64_length(const double *value)
     }
 }
 
-size_t vf8_asn1_ber_real_f64_length_byval(const double value)
+size_t vf_asn1_ber_real_f64_length_byval(const double value)
 {
     f64_real_data d = f64_asn1_data_get(value);
 
@@ -927,7 +927,7 @@ size_t vf8_asn1_ber_real_f64_length_byval(const double value)
     }
 }
 
-int vf8_asn1_ber_real_f64_read(vf8_buf *buf, size_t len, double *value)
+int vf_asn1_ber_real_f64_read(vf_buf *buf, size_t len, double *value)
 {
     int8_t b;
     double v = 0;
@@ -941,7 +941,7 @@ int vf8_asn1_ber_real_f64_read(vf8_buf *buf, size_t len, double *value)
     bool sign;
     size_t frac_lz;
 
-    if (vf8_buf_read_i8(buf, &b) != 1) {
+    if (vf_buf_read_i8(buf, &b) != 1) {
         goto err;
     }
     fmt = _asn1_real_format(b);
@@ -965,10 +965,10 @@ int vf8_asn1_ber_real_f64_read(vf8_buf *buf, size_t len, double *value)
     }
     frac_len = len - exp_len - 1;
 
-    if (vf8_asn1_ber_integer_s64_read(buf, exp_len, &sexp) < 0) {
+    if (vf_asn1_ber_integer_s64_read(buf, exp_len, &sexp) < 0) {
         goto err;
     }
-    if (vf8_asn1_ber_integer_u64_read(buf, frac_len, &frac) < 0) {
+    if (vf_asn1_ber_integer_u64_read(buf, frac_len, &frac) < 0) {
         goto err;
     }
     frac_lz = clz(frac);
@@ -1001,7 +1001,7 @@ err:
     return -1;
 }
 
-f64_result vf8_asn1_ber_real_f64_read_byval(vf8_buf *buf, size_t len)
+f64_result vf_asn1_ber_real_f64_read_byval(vf_buf *buf, size_t len)
 {
     int8_t b;
     double v = 0;
@@ -1017,7 +1017,7 @@ f64_result vf8_asn1_ber_real_f64_read_byval(vf8_buf *buf, size_t len)
     s64_result rexp;
     u64_result rfrac;
 
-    if (vf8_buf_read_i8(buf, &b) != 1) {
+    if (vf_buf_read_i8(buf, &b) != 1) {
         return f64_result { 0, -1 };
     }
     fmt = _asn1_real_format(b);
@@ -1041,12 +1041,12 @@ f64_result vf8_asn1_ber_real_f64_read_byval(vf8_buf *buf, size_t len)
     }
     frac_len = len - exp_len - 1;
 
-    rexp = vf8_asn1_ber_integer_s64_read_byval(buf, exp_len);
+    rexp = vf_asn1_ber_integer_s64_read_byval(buf, exp_len);
     if (rexp.error < 0) {
         return f64_result { 0, rexp.error };
     }
     sexp = rexp.value;
-    rfrac = vf8_asn1_ber_integer_u64_read_byval(buf, frac_len);
+    rfrac = vf_asn1_ber_integer_u64_read_byval(buf, frac_len);
     if (rfrac.error < 0) {
         return f64_result { 0, rfrac.error };
     }
@@ -1077,7 +1077,7 @@ f64_result vf8_asn1_ber_real_f64_read_byval(vf8_buf *buf, size_t len)
     return f64_result { v, 0 };
 }
 
-int vf8_asn1_ber_real_f64_write(vf8_buf *buf, size_t len, const double *value)
+int vf_asn1_ber_real_f64_write(vf_buf *buf, size_t len, const double *value)
 {
     f64_real_data d = f64_asn1_data_get(*value);
 
@@ -1100,23 +1100,23 @@ int vf8_asn1_ber_real_f64_write(vf8_buf *buf, size_t len, const double *value)
         }
         b = _asn1_real_binary(d.sign, exp_code);
     }
-    if (vf8_buf_write_i8(buf, b) != 1) {
+    if (vf_buf_write_i8(buf, b) != 1) {
         return -1;
     }
     if ((d.zero && d.sign) || d.inf || d.nan) {
         return 0;
     }
-    if (vf8_asn1_ber_integer_s64_write(buf, d.exp_len, &d.sexp) < 0) {
+    if (vf_asn1_ber_integer_s64_write(buf, d.exp_len, &d.sexp) < 0) {
         return -1;
     }
-    if (vf8_asn1_ber_integer_u64_write(buf, d.frac_len, &d.frac) < 0) {
+    if (vf_asn1_ber_integer_u64_write(buf, d.frac_len, &d.frac) < 0) {
         return -1;
     }
 
     return 0;
 }
 
-int vf8_asn1_ber_real_f64_write_byval(vf8_buf *buf, size_t len, const double value)
+int vf_asn1_ber_real_f64_write_byval(vf_buf *buf, size_t len, const double value)
 {
     f64_real_data d = f64_asn1_data_get(value);
 
@@ -1139,58 +1139,58 @@ int vf8_asn1_ber_real_f64_write_byval(vf8_buf *buf, size_t len, const double val
         }
         b = _asn1_real_binary(d.sign, exp_code);
     }
-    if (vf8_buf_write_i8(buf, b) != 1) {
+    if (vf_buf_write_i8(buf, b) != 1) {
         return -1;
     }
     if ((d.zero && d.sign) || d.inf || d.nan) {
         return 0;
     }
-    if (vf8_asn1_ber_integer_s64_write_byval(buf, d.exp_len, d.sexp) < 0) {
+    if (vf_asn1_ber_integer_s64_write_byval(buf, d.exp_len, d.sexp) < 0) {
         return -1;
     }
-    if (vf8_asn1_ber_integer_u64_write_byval(buf, d.frac_len, d.frac) < 0) {
+    if (vf_asn1_ber_integer_u64_write_byval(buf, d.frac_len, d.frac) < 0) {
         return -1;
     }
 
     return 0;
 }
 
-int vf8_asn1_der_real_f64_read(vf8_buf *buf, asn1_tag _tag, double *value)
+int vf_asn1_der_real_f64_read(vf_buf *buf, asn1_tag _tag, double *value)
 {
     asn1_hdr hdr;
-    if (vf8_asn1_ber_ident_read(buf, &hdr._id) < 0) return -1;
-    if (vf8_asn1_ber_length_read(buf, &hdr._length) < 0) return -1;
-    return vf8_asn1_ber_real_f64_read(buf, hdr._length, value);
+    if (vf_asn1_ber_ident_read(buf, &hdr._id) < 0) return -1;
+    if (vf_asn1_ber_length_read(buf, &hdr._length) < 0) return -1;
+    return vf_asn1_ber_real_f64_read(buf, hdr._length, value);
 }
 
-f64_result vf8_asn1_der_real_f64_read_byval(vf8_buf *buf, asn1_tag _tag)
+f64_result vf_asn1_der_real_f64_read_byval(vf_buf *buf, asn1_tag _tag)
 {
     asn1_hdr hdr;
-    if (vf8_asn1_ber_ident_read(buf, &hdr._id) < 0) return f64_result { 0, -1 };
-    if (vf8_asn1_ber_length_read(buf, &hdr._length) < 0) return f64_result { 0, -1 };
-    return vf8_asn1_ber_real_f64_read_byval(buf, hdr._length);
+    if (vf_asn1_ber_ident_read(buf, &hdr._id) < 0) return f64_result { 0, -1 };
+    if (vf_asn1_ber_length_read(buf, &hdr._length) < 0) return f64_result { 0, -1 };
+    return vf_asn1_ber_real_f64_read_byval(buf, hdr._length);
 }
 
-int vf8_asn1_der_real_f64_write(vf8_buf *buf, asn1_tag _tag, const double *value)
+int vf_asn1_der_real_f64_write(vf_buf *buf, asn1_tag _tag, const double *value)
 {
     asn1_hdr hdr = {
-        { (u64)_tag, 0, asn1_class_universal }, vf8_asn1_ber_real_f64_length(value)
+        { (u64)_tag, 0, asn1_class_universal }, vf_asn1_ber_real_f64_length(value)
     };
 
-    if (vf8_asn1_ber_ident_write(buf, hdr._id) < 0) return -1;
-    if (vf8_asn1_ber_length_write(buf, hdr._length) < 0) return -1;
-    return vf8_asn1_ber_real_f64_write(buf, hdr._length, value);
+    if (vf_asn1_ber_ident_write(buf, hdr._id) < 0) return -1;
+    if (vf_asn1_ber_length_write(buf, hdr._length) < 0) return -1;
+    return vf_asn1_ber_real_f64_write(buf, hdr._length, value);
 }
 
-int vf8_asn1_der_real_f64_write_byval(vf8_buf *buf, asn1_tag _tag, const double value)
+int vf_asn1_der_real_f64_write_byval(vf_buf *buf, asn1_tag _tag, const double value)
 {
     asn1_hdr hdr = {
-        { (u64)_tag, 0, asn1_class_universal }, vf8_asn1_ber_real_f64_length_byval(value)
+        { (u64)_tag, 0, asn1_class_universal }, vf_asn1_ber_real_f64_length_byval(value)
     };
 
-    if (vf8_asn1_ber_ident_write(buf, hdr._id) < 0) return -1;
-    if (vf8_asn1_ber_length_write(buf, hdr._length) < 0) return -1;
-    return vf8_asn1_ber_real_f64_write_byval(buf, hdr._length, value);
+    if (vf_asn1_ber_ident_write(buf, hdr._id) < 0) return -1;
+    if (vf_asn1_ber_length_write(buf, hdr._length) < 0) return -1;
+    return vf_asn1_ber_real_f64_write_byval(buf, hdr._length, value);
 }
 
 /*
@@ -1198,10 +1198,10 @@ int vf8_asn1_der_real_f64_write_byval(vf8_buf *buf, asn1_tag _tag, const double 
  */
 
 /*
- * vf8_f64_data contains fraction, signed exponent, their
+ * vf_f64_data contains fraction, signed exponent, their
  * encoded lengths and flags for sign, infinity, nan and zero.
  */
-struct vf8_f64_data
+struct vf_f64_data
 {
     bool sign;
     s64 sexp;
@@ -1211,17 +1211,17 @@ struct vf8_f64_data
 /*
  * extract exponent and left-justified fraction
  */
-static vf8_f64_data vf8_f64_data_get(double value)
+static vf_f64_data vf_f64_data_get(double value)
 {
     bool sign = !!f64_sign_dec(value);
     s64 sexp = (s64)(f64_exp_dec(value) - f64_exp_bias);
     u64 frac = (u64)f64_mant_dec(value) << (f64_exp_size + 1);
 
-    return vf8_f64_data { sign, sexp, frac };
+    return vf_f64_data { sign, sexp, frac };
 }
 
 #if DEBUG_ENCODING
-static void _vf8_debug_pack(double v, u8 pre, s64 vp_exp, u64 vp_man, s64 vd_exp, u64 vd_man)
+static void _vf_debug_pack(double v, u8 pre, s64 vp_exp, u64 vp_man, s64 vd_exp, u64 vd_man)
 {
     bool vf_inl = (pre >> 7) & 1;
     bool vf_sgn = (pre >> 6) & 1;
@@ -1251,7 +1251,7 @@ static void _vf8_debug_pack(double v, u8 pre, s64 vp_exp, u64 vp_man, s64 vd_exp
 }
 #endif
 
-int vf8_f64_read(vf8_buf *buf, double *value)
+int vf_f64_read(vf_buf *buf, double *value)
 {
     s8 pre;
     double v = 0;
@@ -1264,7 +1264,7 @@ int vf8_f64_read(vf8_buf *buf, double *value)
     u64 vp_man = 0;
     s64 vp_exp = 0;
 
-    if (vf8_buf_read_i8(buf, &pre) != 1) {
+    if (vf_buf_read_i8(buf, &pre) != 1) {
         goto err;
     }
 
@@ -1274,10 +1274,10 @@ int vf8_f64_read(vf8_buf *buf, double *value)
     vf_man = pre & 15;
 
     if (!vf_inl) {
-        if (vf_exp && vf8_le_ber_integer_s64_read(buf, vf_exp, &vr_exp) < 0) {
+        if (vf_exp && vf_le_ber_integer_s64_read(buf, vf_exp, &vr_exp) < 0) {
             goto err;
         }
-        if (vf_man && vf8_le_ber_integer_u64_read(buf, vf_man, &vr_man) < 0) {
+        if (vf_man && vf_le_ber_integer_u64_read(buf, vf_man, &vr_man) < 0) {
             goto err;
         }
     }
@@ -1335,7 +1335,7 @@ int vf8_f64_read(vf8_buf *buf, double *value)
     *value = v;
 
 #if DEBUG_ENCODING
-    _vf8_debug_pack(v, pre, vp_exp - f64_exp_bias, vp_man << 12, vr_exp, vr_man);
+    _vf_debug_pack(v, pre, vp_exp - f64_exp_bias, vp_man << 12, vr_exp, vr_man);
 #endif
 
     return 0;
@@ -1349,7 +1349,7 @@ enum : u64 {
     u64_msn = 0xf000000000000000ull
 };
 
-f64_result vf8_f64_read_byval(vf8_buf *buf)
+f64_result vf_f64_read_byval(vf_buf *buf)
 {
     s8 pre;
     double v = 0;
@@ -1362,7 +1362,7 @@ f64_result vf8_f64_read_byval(vf8_buf *buf)
     u64 vp_man = 0;
     s64 vp_exp = 0;
 
-    if (vf8_buf_read_i8(buf, &pre) != 1) {
+    if (vf_buf_read_i8(buf, &pre) != 1) {
         return f64_result { 0, -1 };
     }
 
@@ -1373,12 +1373,12 @@ f64_result vf8_f64_read_byval(vf8_buf *buf)
 
     if (!vf_inl) {
         if (vf_exp) {
-            s64_result r = vf8_le_ber_integer_s64_read_byval(buf, vf_exp);
+            s64_result r = vf_le_ber_integer_s64_read_byval(buf, vf_exp);
             if (r.error < 0) return f64_result { 0, r.error };
             vr_exp = r.value;
         }
         if (vf_man) {
-            u64_result r = vf8_le_ber_integer_u64_read_byval(buf, vf_man);
+            u64_result r = vf_le_ber_integer_u64_read_byval(buf, vf_man);
             if (r.error < 0) return f64_result { 0, r.error };
             vr_man = r.value;
         }
@@ -1436,17 +1436,17 @@ f64_result vf8_f64_read_byval(vf8_buf *buf)
     v = f64_pack_float(f64_struct{vp_man, (u64)vp_exp, vf_sgn});
 
 #if DEBUG_ENCODING
-    _vf8_debug_pack(v, pre, vp_exp - f64_exp_bias, vp_man << 12, vr_exp, vr_man);
+    _vf_debug_pack(v, pre, vp_exp - f64_exp_bias, vp_man << 12, vr_exp, vr_man);
 #endif
 
     return f64_result { v, 0 };
 }
 
-int vf8_f64_write(vf8_buf *buf, const double *value)
+int vf_f64_write(vf_buf *buf, const double *value)
 {
     s8 pre;
     double v = *value;
-    vf8_f64_data d = vf8_f64_data_get(v);
+    vf_f64_data d = vf_f64_data_get(v);
     int vf_exp = 0;
     int vf_man = 0;
     u64 vw_man = 0;
@@ -1484,57 +1484,57 @@ int vf8_f64_write(vf8_buf *buf, const double *value)
             size_t sh = ctz(d.frac), lz = clz(d.frac);
             vw_man = d.frac >> sh;
             vw_exp = d.sexp - lz - 1;
-            vf_exp = (u8)vf8_le_ber_integer_s64_length_byval(vw_exp);
-            vf_man = (u8)vf8_le_ber_integer_u64_length_byval(vw_man);
+            vf_exp = (u8)vf_le_ber_integer_s64_length_byval(vw_exp);
+            vf_man = (u8)vf_le_ber_integer_u64_length_byval(vw_man);
             pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
         }
         else if (d.sexp >= 0 && d.sexp < 64 && d.frac > 0 && (d.frac << d.sexp) == 0) {
             size_t sh = 64 - d.sexp;
             vw_man = (d.frac >> sh) | (u64_msb >> (sh - 1));
-            vf_man = (u8)vf8_le_ber_integer_u64_length_byval(vw_man);
+            vf_man = (u8)vf_le_ber_integer_u64_length_byval(vw_man);
             pre = (d.sign << 6) | vf_man;
         }
         else if (d.frac == 0) {
             vw_exp = d.sexp;
-            vf_exp = (u8)vf8_le_ber_integer_s64_length_byval(vw_exp);
+            vf_exp = (u8)vf_le_ber_integer_s64_length_byval(vw_exp);
             pre = (d.sign << 6) | (vf_exp << 4);
         }
         else {
             size_t sh = ctz(d.frac);
             vw_man = (d.frac >> sh) | (u64_msb >> (sh - 1));
             vw_exp = d.sexp;
-            vf_exp = (u8)vf8_le_ber_integer_s64_length_byval(vw_exp);
-            vf_man = (u8)vf8_le_ber_integer_u64_length_byval(vw_man);
+            vf_exp = (u8)vf_le_ber_integer_s64_length_byval(vw_exp);
+            vf_man = (u8)vf_le_ber_integer_u64_length_byval(vw_man);
             pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
         }
         /* vf_exp and vf_man contain length of exponent and fraction in bytes */
     }
 
-    if (vf8_buf_write_i8(buf, pre) != 1) {
+    if (vf_buf_write_i8(buf, pre) != 1) {
         return -1;
     }
 
     if ((pre & 0x80) == 0) {
-        if (vf_exp && vf8_le_ber_integer_s64_write_byval(buf, vf_exp, vw_exp) < 0) {
+        if (vf_exp && vf_le_ber_integer_s64_write_byval(buf, vf_exp, vw_exp) < 0) {
             return -1;
         }
-        if (vf_man && vf8_le_ber_integer_u64_write_byval(buf, vf_man, vw_man) < 0) {
+        if (vf_man && vf_le_ber_integer_u64_write_byval(buf, vf_man, vw_man) < 0) {
             return -1;
         }
     }
 
 #if DEBUG_ENCODING
-    _vf8_debug_pack(v, pre, d.sexp, d.frac, vw_exp, vw_man);
+    _vf_debug_pack(v, pre, d.sexp, d.frac, vw_exp, vw_man);
 #endif
 
     return 0;
 }
 
-int vf8_f64_write_byval(vf8_buf *buf, const double value)
+int vf_f64_write_byval(vf_buf *buf, const double value)
 {
     s8 pre;
     const double v = value;
-    vf8_f64_data d = vf8_f64_data_get(v);
+    vf_f64_data d = vf_f64_data_get(v);
     int vf_exp = 0;
     int vf_man = 0;
     u64 vw_man = 0;
@@ -1572,60 +1572,60 @@ int vf8_f64_write_byval(vf8_buf *buf, const double value)
             size_t sh = ctz(d.frac), lz = clz(d.frac);
             vw_man = d.frac >> sh;
             vw_exp = d.sexp - lz - 1;
-            vf_exp = (u8)vf8_le_ber_integer_s64_length_byval(vw_exp);
-            vf_man = (u8)vf8_le_ber_integer_u64_length_byval(vw_man);
+            vf_exp = (u8)vf_le_ber_integer_s64_length_byval(vw_exp);
+            vf_man = (u8)vf_le_ber_integer_u64_length_byval(vw_man);
             pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
         }
         else if (d.sexp >= 0 && d.sexp < 64 && d.frac > 0 && (d.frac << d.sexp) == 0) {
             size_t sh = 64 - d.sexp;
             vw_man = (d.frac >> sh) | (u64_msb >> (sh - 1));
-            vf_man = (u8)vf8_le_ber_integer_u64_length_byval(vw_man);
+            vf_man = (u8)vf_le_ber_integer_u64_length_byval(vw_man);
             pre = (d.sign << 6) | vf_man;
         }
         else if (d.frac == 0) {
             vw_exp = d.sexp;
-            vf_exp = (u8)vf8_le_ber_integer_s64_length_byval(vw_exp);
+            vf_exp = (u8)vf_le_ber_integer_s64_length_byval(vw_exp);
             pre = (d.sign << 6) | (vf_exp << 4);
         }
         else {
             size_t sh = ctz(d.frac);
             vw_man = (d.frac >> sh) | (u64_msb >> (sh - 1));
             vw_exp = d.sexp;
-            vf_exp = (u8)vf8_le_ber_integer_s64_length_byval(vw_exp);
-            vf_man = (u8)vf8_le_ber_integer_u64_length_byval(vw_man);
+            vf_exp = (u8)vf_le_ber_integer_s64_length_byval(vw_exp);
+            vf_man = (u8)vf_le_ber_integer_u64_length_byval(vw_man);
             pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
         }
         /* vf_exp and vf_man contain length of exponent and fraction in bytes */
     }
 
-    if (vf8_buf_write_i8(buf, pre) != 1) {
+    if (vf_buf_write_i8(buf, pre) != 1) {
         return -1;
     }
 
     if ((pre & 0x80) == 0) {
-        if (vf_exp && vf8_le_ber_integer_s64_write_byval(buf, vf_exp, vw_exp) < 0) {
+        if (vf_exp && vf_le_ber_integer_s64_write_byval(buf, vf_exp, vw_exp) < 0) {
             return -1;
         }
-        if (vf_man && vf8_le_ber_integer_u64_write_byval(buf, vf_man, vw_man) < 0) {
+        if (vf_man && vf_le_ber_integer_u64_write_byval(buf, vf_man, vw_man) < 0) {
             return -1;
         }
     }
 
 #if DEBUG_ENCODING
-    _vf8_debug_pack(v, pre, d.sexp, d.frac, vw_exp, vw_man);
+    _vf_debug_pack(v, pre, d.sexp, d.frac, vw_exp, vw_man);
 #endif
 
     return 0;
 }
 
-int leb_u64_read(vf8_buf *buf, u64 *value)
+int leb_u64_read(vf_buf *buf, u64 *value)
 {
     int8_t b;
     size_t w = 0;
     u64 v = 0;
 
     do {
-        if (vf8_buf_read_i8(buf, &b) != 1) {
+        if (vf_buf_read_i8(buf, &b) != 1) {
             goto err;
         }
         v |= ((u64)b & 0x7f) << w;
@@ -1643,14 +1643,14 @@ err:
     return -1;
 }
 
-u64_result leb_u64_read_byval(vf8_buf *buf)
+u64_result leb_u64_read_byval(vf_buf *buf)
 {
     int8_t b;
     size_t w = 0;
     u64 v = 0;
 
     do {
-        if (vf8_buf_read_i8(buf, &b) != 1) {
+        if (vf_buf_read_i8(buf, &b) != 1) {
             return u64_result { 0, -1 };
         }
         v |= ((u64)b & 0x7f) << w;
@@ -1664,7 +1664,7 @@ u64_result leb_u64_read_byval(vf8_buf *buf)
     return u64_result { v, 0 };
 }
 
-int leb_u64_write(vf8_buf *buf, const u64 *value)
+int leb_u64_write(vf_buf *buf, const u64 *value)
 {
     size_t len, i;
     u64 x = *value;
@@ -1675,23 +1675,23 @@ int leb_u64_write(vf8_buf *buf, const u64 *value)
     }
 
     len = (x == 0) ? 1 : 8 - ((clz(x) - 1) / 7) + 1;
-    if (vf8_buf_check_capacity(buf, len) < 0) {
+    if (vf_buf_check_capacity(buf, len) < 0) {
         return -1;
     }
     for (i = 0; i < len - 1; i++) {
-        if (vf8_buf_write_unchecked_i8(buf, ((x & 0x7f) | 0x80)) != 1) {
+        if (vf_buf_write_unchecked_i8(buf, ((x & 0x7f) | 0x80)) != 1) {
             return -1;
         }
         x >>= 7;
     }
-    if (vf8_buf_write_unchecked_i8(buf, (x & 0x7f)) != 1) {
+    if (vf_buf_write_unchecked_i8(buf, (x & 0x7f)) != 1) {
         return -1;
     }
 
     return 0;
 }
 
-int leb_u64_write_byval(vf8_buf *buf, const u64 value)
+int leb_u64_write_byval(vf_buf *buf, const u64 value)
 {
     size_t len, i;
     u64 x = value;
@@ -1702,29 +1702,29 @@ int leb_u64_write_byval(vf8_buf *buf, const u64 value)
     }
 
     len = (x == 0) ? 1 : 8 - ((clz(x) - 1) / 7) + 1;
-    if (vf8_buf_check_capacity(buf, len) < 0) {
+    if (vf_buf_check_capacity(buf, len) < 0) {
         return -1;
     }
     for (i = 0; i < len - 1; i++) {
-        if (vf8_buf_write_unchecked_i8(buf, ((x & 0x7f) | 0x80)) != 1) {
+        if (vf_buf_write_unchecked_i8(buf, ((x & 0x7f) | 0x80)) != 1) {
             return -1;
         }
         x >>= 7;
     }
-    if (vf8_buf_write_unchecked_i8(buf, (x & 0x7f)) != 1) {
+    if (vf_buf_write_unchecked_i8(buf, (x & 0x7f)) != 1) {
         return -1;
     }
 
     return 0;
 }
 
-int vlu_u64_read(vf8_buf *buf, u64 *value)
+int vlu_u64_read(vf_buf *buf, u64 *value)
 {
     size_t len;
     int8_t b;
     u64 v = 0;
 
-    if (vf8_buf_read_i8(buf, &b) != 1) {
+    if (vf_buf_read_i8(buf, &b) != 1) {
         goto err;
     }
 
@@ -1732,7 +1732,7 @@ int vlu_u64_read(vf8_buf *buf, u64 *value)
     if (len > 8) {
         goto err;
     }
-    if (len > 1 && vf8_le_ber_integer_u64_read(buf, len - 1, &v) < 0) {
+    if (len > 1 && vf_le_ber_integer_u64_read(buf, len - 1, &v) < 0) {
         goto err;
     }
     v = ((u64)(u8)b >> len) | v << (8 - len);
@@ -1744,14 +1744,14 @@ err:
     return -1;
 }
 
-u64_result vlu_u64_read_byval(vf8_buf *buf)
+u64_result vlu_u64_read_byval(vf_buf *buf)
 {
     size_t len;
     int8_t b;
     u64_result r;
     u64 v = 0;
 
-    if (vf8_buf_read_i8(buf, &b) != 1) {
+    if (vf_buf_read_i8(buf, &b) != 1) {
         return u64_result { 0, -1 };
     }
 
@@ -1760,7 +1760,7 @@ u64_result vlu_u64_read_byval(vf8_buf *buf)
         return u64_result { 0, -1 };
     }
     if (len > 1) {
-        r = vf8_le_ber_integer_u64_read_byval(buf, len - 1);
+        r = vf_le_ber_integer_u64_read_byval(buf, len - 1);
         if (r.error < 0) {
             return u64_result { 0, r.error };
         }
@@ -1769,7 +1769,7 @@ u64_result vlu_u64_read_byval(vf8_buf *buf)
     return u64_result { ((u64)(u8)b >> len) | v << (8 - len), 0 };
 }
 
-int vlu_u64_write(vf8_buf *buf, const u64 *value)
+int vlu_u64_write(vf_buf *buf, const u64 *value)
 {
     size_t len;
     const u64 x = *value;
@@ -1782,14 +1782,14 @@ int vlu_u64_write(vf8_buf *buf, const u64 *value)
     len = (x == 0) ? 1 : 8 - ((clz(x) - 1) / 7) + 1;
     v = (x << len) | ((1ull << (len-1))-1);
 
-    if (vf8_le_ber_integer_u64_write(buf, len, &v) < 0) {
+    if (vf_le_ber_integer_u64_write(buf, len, &v) < 0) {
         return -1;
     }
 
     return 0;
 }
 
-int vlu_u64_write_byval(vf8_buf *buf, const u64 value)
+int vlu_u64_write_byval(vf_buf *buf, const u64 value)
 {
     size_t len;
     const u64 x = value;
@@ -1802,7 +1802,7 @@ int vlu_u64_write_byval(vf8_buf *buf, const u64 value)
     len = (x == 0) ? 1 : 8 - ((clz(x) - 1) / 7) + 1;
     v = (x << len) | ((1ull << (len-1))-1);
 
-    if (vf8_le_ber_integer_u64_write_byval(buf, len, v) < 0) {
+    if (vf_le_ber_integer_u64_write_byval(buf, len, v) < 0) {
         return -1;
     }
 

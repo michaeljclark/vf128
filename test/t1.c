@@ -18,37 +18,37 @@ const unsigned char pi_asn[] = { 0x80, 0xD0, 0x03, 0x24, 0x3F, 0x6A, 0x88, 0x85,
 void test_ber_pi()
 {
     double f;
-    vf8_buf *buf = vf8_buf_new(128);
-    size_t len = vf8_asn1_ber_real_f64_length(&pi_dbl);
-    vf8_asn1_ber_real_f64_write(buf, len, &pi_dbl);
-    vf8_buf_reset(buf);
-    vf8_asn1_ber_real_f64_read(buf, len, &f);
+    vf_buf *buf = vf_buf_new(128);
+    size_t len = vf_asn1_ber_real_f64_length(&pi_dbl);
+    vf_asn1_ber_real_f64_write(buf, len, &pi_dbl);
+    vf_buf_reset(buf);
+    vf_asn1_ber_real_f64_read(buf, len, &f);
     printf(ber_real_fmt, (double)f);
-    vf8_buf_dump(buf);
-    vf8_buf_destroy(buf);
+    vf_buf_dump(buf);
+    vf_buf_destroy(buf);
 }
 
 void test_vf8(double f)
 {
     double r;
-    vf8_buf *buf = vf8_buf_new(128);
-    assert(!vf8_f64_write(buf, &f));
-    vf8_buf_reset(buf);
-    vf8_f64_read(buf, &r);
+    vf_buf *buf = vf_buf_new(128);
+    assert(!vf_f64_write(buf, &f));
+    vf_buf_reset(buf);
+    vf_f64_read(buf, &r);
     printf(vf128_fmt, f, r);
-    vf8_buf_dump(buf);
+    vf_buf_dump(buf);
     assert(isnan(f) ? isnan(r) : f == r);
-    vf8_buf_destroy(buf);
+    vf_buf_destroy(buf);
 }
 
-void test_vf8_loop()
+void test_vf_loop()
 {
     for (double i = -3.875; i <= 3.875; i += (i < -0.5 || i >= 0.5) ? 0.125 : 0.0625) {
         test_vf8(i);
     }
 }
 
-void test_vf8_adhoc()
+void test_vf_adhoc()
 {
     test_vf8(pi_dbl);
     test_vf8(_f64_inf());
@@ -78,37 +78,37 @@ void test_vf8_adhoc()
 void test_leb(u64 val)
 {
     u64 val2;
-    vf8_buf *buf = vf8_buf_new(128);
+    vf_buf *buf = vf_buf_new(128);
     leb_u64_write(buf, &val);
-    vf8_buf_reset(buf);
+    vf_buf_reset(buf);
     leb_u64_read(buf, &val2);
     printf(leb_fmt, val, val2);
-    vf8_buf_dump(buf);
-    vf8_buf_destroy(buf);
+    vf_buf_dump(buf);
+    vf_buf_destroy(buf);
 }
 
 void test_vlu(u64 val)
 {
     u64 val2;
-    vf8_buf *buf = vf8_buf_new(128);
+    vf_buf *buf = vf_buf_new(128);
     vlu_u64_write(buf, &val);
-    vf8_buf_reset(buf);
+    vf_buf_reset(buf);
     vlu_u64_read(buf, &val2);
     printf(vlu_fmt, val, val2);
-    vf8_buf_dump(buf);
-    vf8_buf_destroy(buf);
+    vf_buf_dump(buf);
+    vf_buf_destroy(buf);
 }
 
 void test_vlu_byval(u64 val)
 {
     u64 val2;
-    vf8_buf *buf = vf8_buf_new(128);
+    vf_buf *buf = vf_buf_new(128);
     vlu_u64_write(buf, &val);
-    vf8_buf_reset(buf);
+    vf_buf_reset(buf);
     val2 = vlu_u64_read_byval(buf).value;
     printf(vlu_fmt, val, val2);
-    vf8_buf_dump(buf);
-    vf8_buf_destroy(buf);
+    vf_buf_dump(buf);
+    vf_buf_destroy(buf);
 }
 
 void test_leb_misc()
@@ -150,8 +150,8 @@ void test_vluc_byval_misc()
 int main(int argc, const char **argv)
 {
     test_ber_pi();
-    test_vf8_loop();
-    test_vf8_adhoc();
+    test_vf_loop();
+    test_vf_adhoc();
     test_leb_misc();
     test_vlu_misc();
     test_vluc_byval_misc();

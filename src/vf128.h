@@ -24,47 +24,47 @@ typedef double f64;
  * buffer interface
  */
 
-struct vf8_buf;
-struct vf8_span;
+struct vf_buf;
+struct vf_span;
 
-typedef struct vf8_buf vf8_buf;
-typedef struct vf8_span vf8_span;
+typedef struct vf_buf vf_buf;
+typedef struct vf_span vf_span;
 
-struct vf8_span
+struct vf_span
 {
     void *data;
     size_t length;
 };
 
-struct vf8_buf
+struct vf_buf
 {
     char *data;
     size_t data_offset;
     size_t data_size;
 };
 
-vf8_buf* vf8_buf_new(size_t size);
-void vf8_buf_destroy(vf8_buf* buf);
-void vf8_buf_dump(vf8_buf *buf);
+vf_buf* vf_buf_new(size_t size);
+void vf_buf_destroy(vf_buf* buf);
+void vf_buf_dump(vf_buf *buf);
 
-static size_t vf8_buf_write_i8(vf8_buf* buf, int8_t num);
-static size_t vf8_buf_write_i16(vf8_buf* buf, int16_t num);
-static size_t vf8_buf_write_i32(vf8_buf* buf, int32_t num);
-static size_t vf8_buf_write_i64(vf8_buf* buf, int64_t num);
-static size_t vf8_buf_write_bytes(vf8_buf* buf, const char *s, size_t len);
-static size_t vf8_buf_write_bytes_unchecked(vf8_buf* buf, const char *s, size_t len);
+static size_t vf_buf_write_i8(vf_buf* buf, int8_t num);
+static size_t vf_buf_write_i16(vf_buf* buf, int16_t num);
+static size_t vf_buf_write_i32(vf_buf* buf, int32_t num);
+static size_t vf_buf_write_i64(vf_buf* buf, int64_t num);
+static size_t vf_buf_write_bytes(vf_buf* buf, const char *s, size_t len);
+static size_t vf_buf_write_bytes_unchecked(vf_buf* buf, const char *s, size_t len);
 
-static size_t vf8_buf_read_i8(vf8_buf* buf, int8_t *num);
-static size_t vf8_buf_read_i16(vf8_buf* buf, int16_t *num);
-static size_t vf8_buf_read_i32(vf8_buf* buf, int32_t *num);
-static size_t vf8_buf_read_i64(vf8_buf* buf, int64_t *num);
-static size_t vf8_buf_read_bytes(vf8_buf* buf, char *s, size_t len);
-static size_t vf8_buf_read_bytes_unchecked(vf8_buf* buf, char *s, size_t len);
+static size_t vf_buf_read_i8(vf_buf* buf, int8_t *num);
+static size_t vf_buf_read_i16(vf_buf* buf, int16_t *num);
+static size_t vf_buf_read_i32(vf_buf* buf, int32_t *num);
+static size_t vf_buf_read_i64(vf_buf* buf, int64_t *num);
+static size_t vf_buf_read_bytes(vf_buf* buf, char *s, size_t len);
+static size_t vf_buf_read_bytes_unchecked(vf_buf* buf, char *s, size_t len);
 
-static void vf8_buf_reset(vf8_buf* buf);
-static void vf8_buf_seek(vf8_buf* buf, size_t offset);
-static char* vf8_buf_data(vf8_buf *buf);
-static size_t vf8_buf_offset(vf8_buf* buf);
+static void vf_buf_reset(vf_buf* buf);
+static void vf_buf_seek(vf_buf* buf, size_t offset);
+static char* vf_buf_data(vf_buf *buf);
+static size_t vf_buf_offset(vf_buf* buf);
 
 /*
  * buffer inline functions
@@ -82,9 +82,9 @@ static size_t vf8_buf_offset(vf8_buf* buf);
 #define USE_CRT_MEMCPY 1
 #endif
 
-#define CREFL_FN(Y,X) vf8_ ## Y ## _ ## X
+#define CREFL_FN(Y,X) vf_ ## Y ## _ ## X
 
-static inline size_t vf8_buf_check_capacity(vf8_buf *buf, size_t len)
+static inline size_t vf_buf_check_capacity(vf_buf *buf, size_t len)
 {
     return (buf->data_offset + len > buf->data_size) ? -1 : 0;
 }
@@ -92,7 +92,7 @@ static inline size_t vf8_buf_check_capacity(vf8_buf *buf, size_t len)
 #if USE_UNALIGNED_ACCESSES && !USE_CRT_MEMCPY
 
 #define CREFL_BUF_WRITE_IMPL(suffix,T,swap)                                    \
-static inline size_t CREFL_FN(buf_write,suffix)(vf8_buf *buf, T val)           \
+static inline size_t CREFL_FN(buf_write,suffix)(vf_buf *buf, T val)           \
 {                                                                              \
     if (buf->data_offset + sizeof(T) > buf->data_size) return 0;               \
     T t = swap(val);                                                           \
@@ -100,7 +100,7 @@ static inline size_t CREFL_FN(buf_write,suffix)(vf8_buf *buf, T val)           \
     buf->data_offset += sizeof(T);                                             \
     return sizeof(T);                                                          \
 }                                                                              \
-static inline size_t CREFL_FN(buf_write_unchecked,suffix)(vf8_buf *buf, T val) \
+static inline size_t CREFL_FN(buf_write_unchecked,suffix)(vf_buf *buf, T val) \
 {                                                                              \
     T t = swap(val);                                                           \
     *(T*)(buf->data + buf->data_offset) = t;                                   \
@@ -109,7 +109,7 @@ static inline size_t CREFL_FN(buf_write_unchecked,suffix)(vf8_buf *buf, T val) \
 }
 
 #define CREFL_BUF_READ_IMPL(suffix,T,swap)                                     \
-static inline size_t CREFL_FN(buf_read,suffix)(vf8_buf *buf, T* val)           \
+static inline size_t CREFL_FN(buf_read,suffix)(vf_buf *buf, T* val)           \
 {                                                                              \
     if (buf->data_offset + sizeof(T) > buf->data_size) return 0;               \
     T t = *(T*)(buf->data + buf->data_offset);                                 \
@@ -117,7 +117,7 @@ static inline size_t CREFL_FN(buf_read,suffix)(vf8_buf *buf, T* val)           \
     buf->data_offset += sizeof(T);                                             \
     return sizeof(T);                                                          \
 }                                                                              \
-static inline size_t CREFL_FN(buf_read_unchecked,suffix)(vf8_buf *buf, T* val) \
+static inline size_t CREFL_FN(buf_read_unchecked,suffix)(vf_buf *buf, T* val) \
 {                                                                              \
     T t = *(T*)(buf->data + buf->data_offset);                                 \
     *val = swap(t);                                                            \
@@ -128,7 +128,7 @@ static inline size_t CREFL_FN(buf_read_unchecked,suffix)(vf8_buf *buf, T* val) \
 #else
 
 #define CREFL_BUF_WRITE_IMPL(suffix,T,swap)                                    \
-static inline size_t CREFL_FN(buf_write,suffix)(vf8_buf *buf, T val)           \
+static inline size_t CREFL_FN(buf_write,suffix)(vf_buf *buf, T val)           \
 {                                                                              \
     if (buf->data_offset + sizeof(T) > buf->data_size) return 0;               \
     T t = swap(val);                                                           \
@@ -136,7 +136,7 @@ static inline size_t CREFL_FN(buf_write,suffix)(vf8_buf *buf, T val)           \
     buf->data_offset += sizeof(T);                                             \
     return sizeof(T);                                                          \
 }                                                                              \
-static inline size_t CREFL_FN(buf_write_unchecked,suffix)(vf8_buf *buf, T val) \
+static inline size_t CREFL_FN(buf_write_unchecked,suffix)(vf_buf *buf, T val) \
 {                                                                              \
     T t = swap(val);                                                           \
     memcpy(buf->data + buf->data_offset, &t, sizeof(T));                       \
@@ -145,7 +145,7 @@ static inline size_t CREFL_FN(buf_write_unchecked,suffix)(vf8_buf *buf, T val) \
 }
 
 #define CREFL_BUF_READ_IMPL(suffix,T,swap)                                     \
-static inline size_t CREFL_FN(buf_read,suffix)(vf8_buf *buf, T* val)           \
+static inline size_t CREFL_FN(buf_read,suffix)(vf_buf *buf, T* val)           \
 {                                                                              \
     if (buf->data_offset + sizeof(T) > buf->data_size) return 0;               \
     T t;                                                                       \
@@ -154,7 +154,7 @@ static inline size_t CREFL_FN(buf_read,suffix)(vf8_buf *buf, T* val)           \
     buf->data_offset += sizeof(T);                                             \
     return sizeof(T);                                                          \
 }                                                                              \
-static inline size_t CREFL_FN(buf_read_unchecked,suffix)(vf8_buf *buf, T* val) \
+static inline size_t CREFL_FN(buf_read_unchecked,suffix)(vf_buf *buf, T* val) \
 {                                                                              \
     T t;                                                                       \
     memcpy(&t, buf->data + buf->data_offset, sizeof(T));                       \
@@ -173,7 +173,7 @@ CREFL_BUF_READ_IMPL(i16,int16_t,le16)
 CREFL_BUF_READ_IMPL(i32,int32_t,le32)
 CREFL_BUF_READ_IMPL(i64,int64_t,le64)
 
-static inline size_t vf8_buf_read_i8(vf8_buf *buf, int8_t* val)
+static inline size_t vf_buf_read_i8(vf_buf *buf, int8_t* val)
 {
     if (buf->data_offset + 1 > buf->data_size) return 0;
     *val = *(int8_t*)(buf->data + buf->data_offset);
@@ -181,28 +181,28 @@ static inline size_t vf8_buf_read_i8(vf8_buf *buf, int8_t* val)
     return 1;
 }
 
-static inline size_t vf8_buf_read_unchecked_i8(vf8_buf *buf, int8_t* val)
+static inline size_t vf_buf_read_unchecked_i8(vf_buf *buf, int8_t* val)
 {
     *val = *(int8_t*)(buf->data + buf->data_offset);
     buf->data_offset++;
     return 1;
 }
 
-static inline size_t vf8_buf_write_i8(vf8_buf *buf, int8_t val)
+static inline size_t vf_buf_write_i8(vf_buf *buf, int8_t val)
 {
     if (buf->data_offset + 1 > buf->data_size) return 0;
     *(int8_t*)(buf->data + buf->data_offset) = val;
     buf->data_offset++;
     return 1;
 }
-static inline size_t vf8_buf_write_unchecked_i8(vf8_buf *buf, int8_t val)
+static inline size_t vf_buf_write_unchecked_i8(vf_buf *buf, int8_t val)
 {
     *(int8_t*)(buf->data + buf->data_offset) = val;
     buf->data_offset++;
     return 1;
 }
 
-static inline size_t vf8_buf_write_bytes(vf8_buf* buf, const char *src, size_t len)
+static inline size_t vf_buf_write_bytes(vf_buf* buf, const char *src, size_t len)
 {
     if (buf->data_offset + len > buf->data_size) return 0;
 #if USE_CRT_MEMCPY
@@ -216,7 +216,7 @@ static inline size_t vf8_buf_write_bytes(vf8_buf* buf, const char *src, size_t l
     return len;
 }
 
-static inline size_t vf8_buf_read_bytes(vf8_buf* buf, char *dst, size_t len)
+static inline size_t vf_buf_read_bytes(vf_buf* buf, char *dst, size_t len)
 {
     if (buf->data_offset + len > buf->data_size) return 0;
 #if USE_CRT_MEMCPY
@@ -230,7 +230,7 @@ static inline size_t vf8_buf_read_bytes(vf8_buf* buf, char *dst, size_t len)
     return len;
 }
 
-static inline size_t vf8_buf_write_bytes_unchecked(vf8_buf* buf, const char *src, size_t len)
+static inline size_t vf_buf_write_bytes_unchecked(vf_buf* buf, const char *src, size_t len)
 {
 #if USE_CRT_MEMCPY
     memcpy(&buf->data[buf->data_offset], src, len);
@@ -243,7 +243,7 @@ static inline size_t vf8_buf_write_bytes_unchecked(vf8_buf* buf, const char *src
     return len;
 }
 
-static inline size_t vf8_buf_read_bytes_unchecked(vf8_buf* buf, char *dst, size_t len)
+static inline size_t vf_buf_read_bytes_unchecked(vf_buf* buf, char *dst, size_t len)
 {
 #if USE_CRT_MEMCPY
     memcpy(dst, &buf->data[buf->data_offset], len);
@@ -256,29 +256,29 @@ static inline size_t vf8_buf_read_bytes_unchecked(vf8_buf* buf, char *dst, size_
     return len;
 }
 
-static inline void vf8_buf_reset(vf8_buf* buf)
+static inline void vf_buf_reset(vf_buf* buf)
 {
     buf->data_offset = 0;
 }
 
-static inline void vf8_buf_seek(vf8_buf* buf, size_t offset)
+static inline void vf_buf_seek(vf_buf* buf, size_t offset)
 {
     buf->data_offset = offset;
 }
 
-static inline char* vf8_buf_data(vf8_buf *buf)
+static inline char* vf_buf_data(vf_buf *buf)
 {
     return buf->data;
 }
 
-static inline size_t vf8_buf_offset(vf8_buf* buf)
+static inline size_t vf_buf_offset(vf_buf* buf)
 {
     return buf->data_offset;
 }
 
-static inline vf8_span vf8_buf_remaining(vf8_buf* buf)
+static inline vf_span vf_buf_remaining(vf_buf* buf)
 {
-    vf8_span s = {
+    vf_span s = {
         &buf->data[buf->data_offset], buf->data_size - buf->data_offset
     };
     return s;
@@ -338,87 +338,87 @@ struct f64_result { f64 value; s64 error; };
 struct s64_result { s64 value; s64 error; };
 struct u64_result { u64 value; s64 error; };
 
-size_t vf8_asn1_ber_tag_length(u64 len);
-int vf8_asn1_ber_tag_read(vf8_buf *buf, u64 *len);
-int vf8_asn1_ber_tag_write(vf8_buf *buf, u64 len);
+size_t vf_asn1_ber_tag_length(u64 len);
+int vf_asn1_ber_tag_read(vf_buf *buf, u64 *len);
+int vf_asn1_ber_tag_write(vf_buf *buf, u64 len);
 
-size_t vf8_asn1_ber_ident_length(asn1_id _id);
-int vf8_asn1_ber_ident_read(vf8_buf *buf, asn1_id *_id);
-int vf8_asn1_ber_ident_write(vf8_buf *buf, asn1_id _id);
+size_t vf_asn1_ber_ident_length(asn1_id _id);
+int vf_asn1_ber_ident_read(vf_buf *buf, asn1_id *_id);
+int vf_asn1_ber_ident_write(vf_buf *buf, asn1_id _id);
 
-size_t vf8_asn1_ber_length_length(u64 length);
-int vf8_asn1_ber_length_read(vf8_buf *buf, u64 *length);
-int vf8_asn1_ber_length_write(vf8_buf *buf, u64 length);
+size_t vf_asn1_ber_length_length(u64 length);
+int vf_asn1_ber_length_read(vf_buf *buf, u64 *length);
+int vf_asn1_ber_length_write(vf_buf *buf, u64 length);
 
-size_t vf8_asn1_ber_integer_u64_length(const u64 *value);
-int vf8_asn1_ber_integer_u64_read(vf8_buf *buf, size_t len, u64 *value);
-int vf8_asn1_ber_integer_u64_write(vf8_buf *buf, size_t len, const u64 *value);
-int vf8_asn1_der_integer_u64_read(vf8_buf *buf, asn1_tag _tag, u64 *value);
-int vf8_asn1_der_integer_u64_write(vf8_buf *buf, asn1_tag _tag, const u64 *value);
+size_t vf_asn1_ber_integer_u64_length(const u64 *value);
+int vf_asn1_ber_integer_u64_read(vf_buf *buf, size_t len, u64 *value);
+int vf_asn1_ber_integer_u64_write(vf_buf *buf, size_t len, const u64 *value);
+int vf_asn1_der_integer_u64_read(vf_buf *buf, asn1_tag _tag, u64 *value);
+int vf_asn1_der_integer_u64_write(vf_buf *buf, asn1_tag _tag, const u64 *value);
 
-size_t vf8_asn1_ber_integer_u64_length_byval(const u64 value);
-struct u64_result vf8_asn1_ber_integer_u64_read_byval(vf8_buf *buf, size_t len);
-int vf8_asn1_ber_integer_u64_write_byval(vf8_buf *buf, size_t len, const u64 value);
-struct u64_result vf8_asn1_der_integer_u64_read_byval(vf8_buf *buf, asn1_tag _tag);
-int vf8_asn1_der_integer_u64_write_byval(vf8_buf *buf, asn1_tag _tag, const u64 value);
+size_t vf_asn1_ber_integer_u64_length_byval(const u64 value);
+struct u64_result vf_asn1_ber_integer_u64_read_byval(vf_buf *buf, size_t len);
+int vf_asn1_ber_integer_u64_write_byval(vf_buf *buf, size_t len, const u64 value);
+struct u64_result vf_asn1_der_integer_u64_read_byval(vf_buf *buf, asn1_tag _tag);
+int vf_asn1_der_integer_u64_write_byval(vf_buf *buf, asn1_tag _tag, const u64 value);
 
-size_t vf8_asn1_ber_integer_s64_length(const s64 *value);
-int vf8_asn1_ber_integer_s64_read(vf8_buf *buf, size_t len, s64 *value);
-int vf8_asn1_ber_integer_s64_write(vf8_buf *buf, size_t len, const s64 *value);
-int vf8_asn1_der_integer_s64_read(vf8_buf *buf, asn1_tag _tag, s64 *value);
-int vf8_asn1_der_integer_s64_write(vf8_buf *buf, asn1_tag _tag, const s64 *value);
+size_t vf_asn1_ber_integer_s64_length(const s64 *value);
+int vf_asn1_ber_integer_s64_read(vf_buf *buf, size_t len, s64 *value);
+int vf_asn1_ber_integer_s64_write(vf_buf *buf, size_t len, const s64 *value);
+int vf_asn1_der_integer_s64_read(vf_buf *buf, asn1_tag _tag, s64 *value);
+int vf_asn1_der_integer_s64_write(vf_buf *buf, asn1_tag _tag, const s64 *value);
 
-size_t vf8_asn1_ber_integer_s64_length_byval(const s64 value);
-struct s64_result vf8_asn1_ber_integer_s64_read_byval(vf8_buf *buf, size_t len);
-int vf8_asn1_ber_integer_s64_write_byval(vf8_buf *buf, size_t len, const s64 value);
-struct s64_result vf8_asn1_der_integer_s64_read_byval(vf8_buf *buf, asn1_tag _tag);
-int vf8_asn1_der_integer_s64_write_byval(vf8_buf *buf, asn1_tag _tag, const s64 value);
+size_t vf_asn1_ber_integer_s64_length_byval(const s64 value);
+struct s64_result vf_asn1_ber_integer_s64_read_byval(vf_buf *buf, size_t len);
+int vf_asn1_ber_integer_s64_write_byval(vf_buf *buf, size_t len, const s64 value);
+struct s64_result vf_asn1_der_integer_s64_read_byval(vf_buf *buf, asn1_tag _tag);
+int vf_asn1_der_integer_s64_write_byval(vf_buf *buf, asn1_tag _tag, const s64 value);
 
-size_t vf8_le_ber_integer_u64_length(const u64 *value);
-int vf8_le_ber_integer_u64_read(vf8_buf *buf, size_t len, u64 *value);
-int vf8_le_ber_integer_u64_write(vf8_buf *buf, size_t len, const u64 *value);
+size_t vf_le_ber_integer_u64_length(const u64 *value);
+int vf_le_ber_integer_u64_read(vf_buf *buf, size_t len, u64 *value);
+int vf_le_ber_integer_u64_write(vf_buf *buf, size_t len, const u64 *value);
 
-size_t vf8_le_ber_integer_u64_length_byval(const u64 value);
-struct u64_result vf8_le_ber_integer_u64_read_byval(vf8_buf *buf, size_t len);
-int vf8_le_ber_integer_u64_write_byval(vf8_buf *buf, size_t len, const u64 value);
+size_t vf_le_ber_integer_u64_length_byval(const u64 value);
+struct u64_result vf_le_ber_integer_u64_read_byval(vf_buf *buf, size_t len);
+int vf_le_ber_integer_u64_write_byval(vf_buf *buf, size_t len, const u64 value);
 
-size_t vf8_le_ber_integer_s64_length(const s64 *value);
-int vf8_le_ber_integer_s64_read(vf8_buf *buf, size_t len, s64 *value);
-int vf8_le_ber_integer_s64_write(vf8_buf *buf, size_t len, const s64 *value);
+size_t vf_le_ber_integer_s64_length(const s64 *value);
+int vf_le_ber_integer_s64_read(vf_buf *buf, size_t len, s64 *value);
+int vf_le_ber_integer_s64_write(vf_buf *buf, size_t len, const s64 *value);
 
-size_t vf8_le_ber_integer_s64_length_byval(const s64 *value);
-struct s64_result vf8_le_ber_integer_s64_read_byval(vf8_buf *buf, size_t len);
-int vf8_le_ber_integer_s64_write_byval(vf8_buf *buf, size_t len, const s64 value);
+size_t vf_le_ber_integer_s64_length_byval(const s64 *value);
+struct s64_result vf_le_ber_integer_s64_read_byval(vf_buf *buf, size_t len);
+int vf_le_ber_integer_s64_write_byval(vf_buf *buf, size_t len, const s64 value);
 
-size_t vf8_asn1_ber_real_f64_length(const double *value);
-int vf8_asn1_ber_real_f64_read(vf8_buf *buf, size_t len, double *value);
-int vf8_asn1_ber_real_f64_write(vf8_buf *buf, size_t len, const double *value);
-int vf8_asn1_der_real_f64_read(vf8_buf *buf, asn1_tag _tag, double *value);
-int vf8_asn1_der_real_f64_write(vf8_buf *buf, asn1_tag _tag, const double *value);
+size_t vf_asn1_ber_real_f64_length(const double *value);
+int vf_asn1_ber_real_f64_read(vf_buf *buf, size_t len, double *value);
+int vf_asn1_ber_real_f64_write(vf_buf *buf, size_t len, const double *value);
+int vf_asn1_der_real_f64_read(vf_buf *buf, asn1_tag _tag, double *value);
+int vf_asn1_der_real_f64_write(vf_buf *buf, asn1_tag _tag, const double *value);
 
-size_t vf8_asn1_ber_real_f64_length_byval(const double value);
-struct f64_result vf8_asn1_ber_real_f64_read_byval(vf8_buf *buf, size_t len);
-int vf8_asn1_ber_real_f64_write_byval(vf8_buf *buf, size_t len, const double value);
-struct f64_result vf8_asn1_der_real_f64_read_byval(vf8_buf *buf, asn1_tag _tag);
-int vf8_asn1_der_real_f64_write_byval(vf8_buf *buf, asn1_tag _tag, const double value);
+size_t vf_asn1_ber_real_f64_length_byval(const double value);
+struct f64_result vf_asn1_ber_real_f64_read_byval(vf_buf *buf, size_t len);
+int vf_asn1_ber_real_f64_write_byval(vf_buf *buf, size_t len, const double value);
+struct f64_result vf_asn1_der_real_f64_read_byval(vf_buf *buf, asn1_tag _tag);
+int vf_asn1_der_real_f64_write_byval(vf_buf *buf, asn1_tag _tag, const double value);
 
-int vf8_f64_read(vf8_buf *buf, double *value);
-int vf8_f64_write(vf8_buf *buf, const double *value);
+int vf_f64_read(vf_buf *buf, double *value);
+int vf_f64_write(vf_buf *buf, const double *value);
 
-struct f64_result vf8_f64_read_byval(vf8_buf *buf);
-int vf8_f64_write_byval(vf8_buf *buf, const double value);
+struct f64_result vf_f64_read_byval(vf_buf *buf);
+int vf_f64_write_byval(vf_buf *buf, const double value);
 
-int leb_u64_read(vf8_buf *buf, u64 *value);
-int leb_u64_write(vf8_buf *buf, const u64 *value);
+int leb_u64_read(vf_buf *buf, u64 *value);
+int leb_u64_write(vf_buf *buf, const u64 *value);
 
-struct u64_result leb_u64_read_byval(vf8_buf *buf);
-int leb_u64_write_byval(vf8_buf *buf, const u64 value);
+struct u64_result leb_u64_read_byval(vf_buf *buf);
+int leb_u64_write_byval(vf_buf *buf, const u64 value);
 
-int vlu_u64_read(vf8_buf *buf, u64 *value);
-int vlu_u64_write(vf8_buf *buf, const u64 *value);
+int vlu_u64_read(vf_buf *buf, u64 *value);
+int vlu_u64_write(vf_buf *buf, const u64 *value);
 
-struct u64_result vlu_u64_read_byval(vf8_buf *buf);
-int vlu_u64_write_byval(vf8_buf *buf, const u64 value);
+struct u64_result vlu_u64_read_byval(vf_buf *buf);
+int vlu_u64_write_byval(vf_buf *buf, const u64 value);
 
 #ifdef __cplusplus
 }
