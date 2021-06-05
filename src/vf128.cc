@@ -1297,10 +1297,16 @@ int vf8_f64_read(vf8_buf *buf, double *value)
                 vp_man = 0;
             }
         }
+        else if (vf_exp == 3) {
+            /* Inf/NaN */
+            vp_exp = f64_exp_mask;
+            /* left-justify the mantissa */
+            vp_man = (u64)vf_man << (f64_mant_size - 4);
+        }
         else {
             /* adjust exponent bias from 2-bit domain to IEEE 754 DP.
              * bias in the 2-bit exponent is 1 and infinity is 3 */
-            vp_exp = vf_exp == 3 ? f64_exp_mask : f64_exp_bias + vf_exp - 1;
+            vp_exp = f64_exp_bias + vf_exp - 1;
             /* left-justify the mantissa */
             vp_man = (u64)vf_man << (f64_mant_size - 4);
         }
@@ -1391,10 +1397,16 @@ f64_result vf8_f64_read_byval(vf8_buf *buf)
                 vp_man = 0;
             }
         }
+        else if (vf_exp == 3) {
+            /* Inf/NaN */
+            vp_exp = f64_exp_mask;
+            /* left-justify the mantissa */
+            vp_man = (u64)vf_man << (f64_mant_size - 4);
+        }
         else {
             /* adjust exponent bias from 2-bit domain to IEEE 754 DP.
              * bias in the 2-bit exponent is 1 and infinity is 3 */
-            vp_exp = vf_exp == 3 ? f64_exp_mask : f64_exp_bias + vf_exp - 1;
+            vp_exp = f64_exp_bias + vf_exp - 1;
             /* left-justify the mantissa */
             vp_man = (u64)vf_man << (f64_mant_size - 4);
         }
@@ -1439,7 +1451,7 @@ int vf8_f64_write(vf8_buf *buf, const double *value)
     // Inf/NaN
     if (d.sexp == f64_exp_bias + 1) {
         vf_exp = 3;
-        vf_man = d.frac >> 60;
+        vf_man = (d.frac != 0) << 3;
         pre = 0x80 | (d.sign << 6) | (vf_exp << 4) | vf_man;
     }
     // Zero
@@ -1527,7 +1539,7 @@ int vf8_f64_write_byval(vf8_buf *buf, const double value)
     // Inf/NaN
     if (d.sexp == f64_exp_bias + 1) {
         vf_exp = 3;
-        vf_man = d.frac >> 60;
+        vf_man = (d.frac != 0) << 3;
         pre = 0x80 | (d.sign << 6) | (vf_exp << 4) | vf_man;
     }
     // Zero
