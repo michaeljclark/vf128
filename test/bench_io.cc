@@ -634,11 +634,15 @@ static void run_benchmark(size_t n, llong repeat, llong count, llong pause_ms)
     }
 }
 
+#if defined(_WIN32)
+# define strtok_r strtok_s
+#endif
+
 int main(int argc, char **argv)
 {
     llong bench_num = -1, repeat = 1, count = 10000000, pause_ms = 0;
     if (argc != 5) {
-        fprintf(stderr, "usage: %s [bench_num] [repeat] [count] [pause_ms]\n", argv[0]);
+        fprintf(stderr, "usage: %s [bench_num(,…)] [repeat] [count] [pause_ms]\n", argv[0]);
         fprintf(stderr, "\ne.g.   %s -1 -10 10000000 1000\n", argv[0]);
         exit(0);
     }
@@ -663,7 +667,14 @@ int main(int argc, char **argv)
             if (pause_ms > 0 && n > 0) _millisleep(pause_ms);
             run_benchmark(n, repeat, count, pause_ms);
         }
-    } else if (bench_num > 0 && bench_num < array_size(benchmarks)) {
-        run_benchmark(bench_num, repeat, count, pause_ms);
+    } else {
+        char *save, *comp = strtok_r(argv[1], ",", &save);
+        while (comp) {
+            bench_num = atoll(comp);
+            if (bench_num > 0 && bench_num < array_size(benchmarks)) {
+                run_benchmark(bench_num, repeat, count, pause_ms);
+            }
+            comp = strtok_r(nullptr, ",", &save);
+        }
     }
 }
