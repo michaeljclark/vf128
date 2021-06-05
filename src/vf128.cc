@@ -1412,8 +1412,6 @@ int vf8_f64_write(vf8_buf *buf, const double *value)
     s8 pre;
     double v = *value;
 	vf8_f64_data d = vf8_f64_data_get(v);
-    bool vf_inl = 0;
-    bool vf_sgn = d.sign;
     int vf_exp = 0;
     int vf_man = 0;
     u64 vw_man = 0;
@@ -1421,16 +1419,14 @@ int vf8_f64_write(vf8_buf *buf, const double *value)
 
     // Inf/NaN
     if (d.sexp == f64_exp_bias + 1) {
-        vf_inl = 1;
         vf_exp = 3;
         vf_man = d.frac >> 60;
+        pre = 0x80 | (d.sign << 6) | (vf_exp << 4) | vf_man;
     }
     // Subnormal and Zero
     else if (d.sexp == -f64_exp_bias) {
         if (d.frac == 0) {
-            vf_inl = 1;
-            vf_exp = 0;
-            vf_man = 0;
+            pre = 0x80 | (d.sign << 6);
         } else {
             /* remove leading 1 and renormalize non zero fraction */
             size_t frac_lz = clz(d.frac);
@@ -1442,20 +1438,15 @@ int vf8_f64_write(vf8_buf *buf, const double *value)
     // Inline (normal)
     else if (d.sexp <= 1 && d.sexp >= 0 &&
              (d.frac & u64_msn) == d.frac) {
-        vf_inl = 1;
-        vf_exp = d.sexp + 1;
-        vf_man = d.frac >> 60;
+        pre = 0x80 | (d.sign << 6) | ((d.sexp + 1) << 4) | (d.frac >> 60);
     }
     // Inline (subnormal)
     else if (d.sexp <= -1 && d.sexp >= -4 &&
              ((d.frac >> -d.sexp) & u64_msn) == (d.frac >> -d.sexp)) {
-        vf_inl = 1;
-        vf_exp = 0;
-        vf_man = (0x10 | (d.frac >> 60)) >> -d.sexp;
+        pre = 0x80 | (d.sign << 6) | ((0x10 | (d.frac >> 60)) >> -d.sexp);
     }
     // Normal Out-of-line
     else { normal:
-        vf_inl = 0;
         /*
          * 1. omit fraction for powers of two (fraction is zero).
          * 2. omit exponent for integers (no fraction bits right of point).
@@ -1463,14 +1454,14 @@ int vf8_f64_write(vf8_buf *buf, const double *value)
          */
         if (d.sexp >= 0 && d.sexp < 64 && d.frac > 0 && (d.frac << d.sexp) == 0) {
             size_t sh = 64 - d.sexp;
-            vf_exp = 0;
             vw_man = (d.frac >> sh) | (u64_msb >> (sh - 1));
             vf_man = vf8_le_ber_integer_u64_length(&vw_man);
+            pre = (d.sign << 6) | vf_man;
         }
         else if (d.frac == 0) {
-            vw_man = 0;
             vw_exp = d.sexp;
             vf_exp = vf8_le_ber_integer_s64_length(&vw_exp);
+            pre = (d.sign << 6) | (vf_exp << 4);
         }
         else {
             size_t sh = ctz(d.frac);
@@ -1478,16 +1469,16 @@ int vf8_f64_write(vf8_buf *buf, const double *value)
             vw_exp = d.sexp;
             vf_exp = vf8_le_ber_integer_s64_length(&vw_exp);
             vf_man = vf8_le_ber_integer_u64_length(&vw_man);
+            pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
         }
         /* vf_exp and vf_man contain length of exponent and fraction in bytes */
     }
 
-    pre = (vf_inl << 7) | (vf_sgn << 6) | (vf_exp << 4) | vf_man;
     if (vf8_buf_write_i8(buf, pre) != 1) {
         return -1;
     }
 
-    if (!vf_inl) {
+    if ((pre & 0x80) == 0) {
         if (vf_exp && vf8_le_ber_integer_s64_write(buf, vf_exp, &vw_exp) < 0) {
             return -1;
         }
@@ -1508,8 +1499,6 @@ int vf8_f64_write_byval(vf8_buf *buf, const double value)
     s8 pre;
     const double v = value;
     vf8_f64_data d = vf8_f64_data_get(v);
-    bool vf_inl = 0;
-    bool vf_sgn = d.sign;
     int vf_exp = 0;
     int vf_man = 0;
     u64 vw_man = 0;
@@ -1517,16 +1506,14 @@ int vf8_f64_write_byval(vf8_buf *buf, const double value)
 
     // Inf/NaN
     if (d.sexp == f64_exp_bias + 1) {
-        vf_inl = 1;
         vf_exp = 3;
         vf_man = d.frac >> 60;
+        pre = 0x80 | (d.sign << 6) | (vf_exp << 4) | vf_man;
     }
     // Subnormal and Zero
     else if (d.sexp == -f64_exp_bias) {
         if (d.frac == 0) {
-            vf_inl = 1;
-            vf_exp = 0;
-            vf_man = 0;
+            pre = 0x80 | (d.sign << 6);
         } else {
             /* remove leading 1 and renormalize non zero fraction */
             size_t frac_lz = clz(d.frac);
@@ -1538,20 +1525,15 @@ int vf8_f64_write_byval(vf8_buf *buf, const double value)
     // Inline (normal)
     else if (d.sexp <= 1 && d.sexp >= 0 &&
              (d.frac & u64_msn) == d.frac) {
-        vf_inl = 1;
-        vf_exp = d.sexp + 1;
-        vf_man = d.frac >> 60;
+        pre = 0x80 | (d.sign << 6) | ((d.sexp + 1) << 4) | (d.frac >> 60);
     }
     // Inline (subnormal)
     else if (d.sexp <= -1 && d.sexp >= -4 &&
              ((d.frac >> -d.sexp) & u64_msn) == (d.frac >> -d.sexp)) {
-        vf_inl = 1;
-        vf_exp = 0;
-        vf_man = (0x10 | (d.frac >> 60)) >> -d.sexp;
+        pre = 0x80 | (d.sign << 6) | ((0x10 | (d.frac >> 60)) >> -d.sexp);
     }
     // Normal Out-of-line
     else { normal:
-        vf_inl = 0;
         /*
          * 1. omit fraction for powers of two (fraction is zero).
          * 2. omit exponent for integers (no fraction bits right of point).
@@ -1559,14 +1541,14 @@ int vf8_f64_write_byval(vf8_buf *buf, const double value)
          */
         if (d.sexp >= 0 && d.sexp < 64 && d.frac > 0 && (d.frac << d.sexp) == 0) {
             size_t sh = 64 - d.sexp;
-            vf_exp = 0;
             vw_man = (d.frac >> sh) | (u64_msb >> (sh - 1));
             vf_man = vf8_le_ber_integer_u64_length_byval(vw_man);
+            pre = (d.sign << 6) | vf_man;
         }
         else if (d.frac == 0) {
-            vw_man = 0;
             vw_exp = d.sexp;
             vf_exp = vf8_le_ber_integer_s64_length_byval(vw_exp);
+            pre = (d.sign << 6) | (vf_exp << 4);
         }
         else {
             size_t sh = ctz(d.frac);
@@ -1574,16 +1556,16 @@ int vf8_f64_write_byval(vf8_buf *buf, const double value)
             vw_exp = d.sexp;
             vf_exp = vf8_le_ber_integer_s64_length_byval(vw_exp);
             vf_man = vf8_le_ber_integer_u64_length_byval(vw_man);
+            pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
         }
         /* vf_exp and vf_man contain length of exponent and fraction in bytes */
     }
 
-    pre = (vf_inl << 7) | (vf_sgn << 6) | (vf_exp << 4) | vf_man;
     if (vf8_buf_write_i8(buf, pre) != 1) {
         return -1;
     }
 
-    if (!vf_inl) {
+    if ((pre & 0x80) == 0) {
         if (vf_exp && vf8_le_ber_integer_s64_write_byval(buf, vf_exp, vw_exp) < 0) {
             return -1;
         }
