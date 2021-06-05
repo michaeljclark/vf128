@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cctype>
+#include <cassert>
 #include <cinttypes>
 
 #include <string>
@@ -1306,11 +1307,20 @@ int vf8_f64_read(vf8_buf *buf, double *value)
     }
     else {
         size_t lz = clz(vr_man);
-        /* if the exponent is not present, the mantissa holds an integer
-         * so we calculate the exponent based on the leading zero count */
-        vp_exp = f64_exp_bias + (vf_exp == 0 ? 63 - lz : vr_exp);
-        /* left-justify the mantissa and truncate the leading 1 */
-        vp_man = (u64)vr_man << (lz + 1) >> (f64_exp_size + 1);
+        if (vr_exp <= -(s64)f64_exp_bias) {
+            assert(vr_exp >= -(s64)f64_exp_bias - f64_mant_size);
+            /* convert normal to subnormal shift using the exponent delta  */
+            size_t sh = f64_exp_bias + vr_exp + lz - f64_exp_size;
+            vp_exp = 0;
+            /* left-justify the mantissa preserving the leading 1 */
+            vp_man = (u64)vr_man << sh;
+        } else {
+            /* if the exponent is not present, the mantissa holds an integer
+             * so we calculate the exponent based on the leading zero count */
+            vp_exp = f64_exp_bias + (vf_exp == 0 ? 63 - lz : vr_exp);
+            /* left-justify the mantissa and truncate the leading 1 */
+            vp_man = (u64)vr_man << (lz + 1) >> (f64_exp_size + 1);
+        }
     }
 
     v = f64_pack_float(f64_struct{vp_man, (u64)vp_exp, vf_sgn});
@@ -1391,11 +1401,20 @@ f64_result vf8_f64_read_byval(vf8_buf *buf)
     }
     else {
         size_t lz = clz(vr_man);
-        /* if the exponent is not present, the mantissa holds an integer
-         * so we calculate the exponent based on the leading zero count */
-        vp_exp = f64_exp_bias + (vf_exp == 0 ? 63 - lz : vr_exp);
-        /* left-justify the mantissa and truncate the leading 1 */
-        vp_man = (u64)vr_man << (lz + 1) >> (f64_exp_size + 1);
+        if (vr_exp <= -(s64)f64_exp_bias) {
+            assert(vr_exp >= -(s64)f64_exp_bias - f64_mant_size);
+            /* convert normal to subnormal shift using the exponent delta  */
+            size_t sh = f64_exp_bias + vr_exp + lz - f64_exp_size;
+            vp_exp = 0;
+            /* left-justify the mantissa preserving the leading 1 */
+            vp_man = (u64)vr_man << sh;
+        } else {
+            /* if the exponent is not present, the mantissa holds an integer
+             * so we calculate the exponent based on the leading zero count */
+            vp_exp = f64_exp_bias + (vf_exp == 0 ? 63 - lz : vr_exp);
+            /* left-justify the mantissa and truncate the leading 1 */
+            vp_man = (u64)vr_man << (lz + 1) >> (f64_exp_size + 1);
+        }
     }
 
     v = f64_pack_float(f64_struct{vp_man, (u64)vp_exp, vf_sgn});
@@ -1423,17 +1442,9 @@ int vf8_f64_write(vf8_buf *buf, const double *value)
         vf_man = d.frac >> 60;
         pre = 0x80 | (d.sign << 6) | (vf_exp << 4) | vf_man;
     }
-    // Subnormal and Zero
-    else if (d.sexp == -f64_exp_bias) {
-        if (d.frac == 0) {
-            pre = 0x80 | (d.sign << 6);
-        } else {
-            /* remove leading 1 and renormalize non zero fraction */
-            size_t frac_lz = clz(d.frac);
-            d.sexp -= frac_lz;
-            d.frac <<= frac_lz + 1;
-            goto normal;
-        }
+    // Zero
+    else if (d.sexp == -f64_exp_bias && d.frac == 0) {
+        pre = 0x80 | (d.sign << 6);
     }
     // Inline (normal)
     else if (d.sexp <= 1 && d.sexp >= 0 &&
@@ -1445,14 +1456,23 @@ int vf8_f64_write(vf8_buf *buf, const double *value)
              ((d.frac >> -d.sexp) & u64_msn) == (d.frac >> -d.sexp)) {
         pre = 0x80 | (d.sign << 6) | ((0x10 | (d.frac >> 60)) >> -d.sexp);
     }
-    // Normal Out-of-line
-    else { normal:
+    // Out-of-line
+    else {
         /*
-         * 1. omit fraction for powers of two (fraction is zero).
-         * 2. omit exponent for integers (no fraction bits right of point).
-         * 3. otherwise encode both exponent and fraction
+         * 1. renormalize subnormal fraction (leading one preserved)
+         * 2. omit fraction for powers of two (fraction is zero).
+         * 3. omit exponent for integers (no fraction bits right of point).
+         * 4. otherwise encode both exponent and fraction
          */
-        if (d.sexp >= 0 && d.sexp < 64 && d.frac > 0 && (d.frac << d.sexp) == 0) {
+        if (d.sexp == -f64_exp_bias) {
+            size_t sh = ctz(d.frac), lz = clz(d.frac);
+            vw_man = d.frac >> sh;
+            vw_exp = d.sexp - lz - 1;
+            vf_exp = vf8_le_ber_integer_s64_length(&vw_exp);
+            vf_man = vf8_le_ber_integer_u64_length(&vw_man);
+            pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
+        }
+        else if (d.sexp >= 0 && d.sexp < 64 && d.frac > 0 && (d.frac << d.sexp) == 0) {
             size_t sh = 64 - d.sexp;
             vw_man = (d.frac >> sh) | (u64_msb >> (sh - 1));
             vf_man = vf8_le_ber_integer_u64_length(&vw_man);
@@ -1510,17 +1530,9 @@ int vf8_f64_write_byval(vf8_buf *buf, const double value)
         vf_man = d.frac >> 60;
         pre = 0x80 | (d.sign << 6) | (vf_exp << 4) | vf_man;
     }
-    // Subnormal and Zero
-    else if (d.sexp == -f64_exp_bias) {
-        if (d.frac == 0) {
-            pre = 0x80 | (d.sign << 6);
-        } else {
-            /* remove leading 1 and renormalize non zero fraction */
-            size_t frac_lz = clz(d.frac);
-            d.sexp -= frac_lz;
-            d.frac <<= frac_lz + 1;
-            goto normal;
-        }
+    // Zero
+    else if (d.sexp == -f64_exp_bias && d.frac == 0) {
+        pre = 0x80 | (d.sign << 6);
     }
     // Inline (normal)
     else if (d.sexp <= 1 && d.sexp >= 0 &&
@@ -1532,14 +1544,23 @@ int vf8_f64_write_byval(vf8_buf *buf, const double value)
              ((d.frac >> -d.sexp) & u64_msn) == (d.frac >> -d.sexp)) {
         pre = 0x80 | (d.sign << 6) | ((0x10 | (d.frac >> 60)) >> -d.sexp);
     }
-    // Normal Out-of-line
-    else { normal:
+    // Out-of-line
+    else {
         /*
-         * 1. omit fraction for powers of two (fraction is zero).
-         * 2. omit exponent for integers (no fraction bits right of point).
-         * 3. otherwise encode both exponent and fraction
+         * 1. renormalize subnormal fraction (leading one preserved)
+         * 2. omit fraction for powers of two (fraction is zero).
+         * 3. omit exponent for integers (no fraction bits right of point).
+         * 4. otherwise encode both exponent and fraction
          */
-        if (d.sexp >= 0 && d.sexp < 64 && d.frac > 0 && (d.frac << d.sexp) == 0) {
+        if (d.sexp == -f64_exp_bias) {
+            size_t sh = ctz(d.frac), lz = clz(d.frac);
+            vw_man = d.frac >> sh;
+            vw_exp = d.sexp - lz - 1;
+            vf_exp = vf8_le_ber_integer_s64_length_byval(vw_exp);
+            vf_man = vf8_le_ber_integer_u64_length_byval(vw_man);
+            pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
+        }
+        else if (d.sexp >= 0 && d.sexp < 64 && d.frac > 0 && (d.frac << d.sexp) == 0) {
             size_t sh = 64 - d.sexp;
             vw_man = (d.frac >> sh) | (u64_msb >> (sh - 1));
             vf_man = vf8_le_ber_integer_u64_length_byval(vw_man);

@@ -69,6 +69,10 @@ void test_vf8_adhoc()
     for (int i = 1; i <= 10; i++) {
         test_vf8(1.0/(1 << i));
     }
+    union { u64 u; f64 d; } subnormal1 = { 0x1ull };
+    union { u64 u; f64 d; } subnormal2 = { 0x1ull };
+    test_vf8(subnormal1.d);
+    test_vf8(subnormal2.d);
 }
 
 void test_leb(u64 val)
