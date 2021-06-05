@@ -89,7 +89,7 @@ Sufficiently small values can be encoded completely within the header byte:
 
 The inline values use the _float7_ format documented earlier.
 
-### out-of-line floating point values
+### normal floating point values
 
 Values that cannot be inlined store their exponent and mantissa length in
 the header.
@@ -117,6 +117,14 @@ the fraction when unpacking it.
   the fraction and add the explicit leading one.
 - To decode, the leading zeros are counted to find shift to left-justify
   the fraction, and drop the explicit leading one.
+
+### subnormals
+
+IEEE 754 subnormals need to be normalized during encoding by subtracting the
+leading zero count less one from the exponent to keep the exponent relative
+to the explicit leading one. To decode, one simply detects values which have
+an exponent less than the minimum exponent of the type that is being decoded
+into, and shift the fraction accordingly.
 
 ### integers
 
