@@ -1282,49 +1282,51 @@ int vf8_f64_read(vf8_buf *buf, double *value)
         }
     }
 
+    /* inline exponent and mantissa using float7 */
     if (vf_inl) {
         if (vf_exp == 0) {
-            /* normalize inline subnormal */
             if (vf_man > 0) {
                 size_t lz = clz((u64)vf_man);
-                /* calculate the exponent based on the leading zero count
-                 * with 4 digits right of the point hence 59 = (63 - 4) */
+                /* inline subnormal - normalize by calculating exponent
+                 * based on the leading zero count for the 4 bits right
+                 * of the point hence 59 = (63 - 4) then left-justify
+                 * the mantissa and truncate the leading 1. */
                 vp_exp = f64_exp_bias + 59 - lz;
-                /* left-justify the mantissa and truncate the leading 1 */
                 vp_man = ((u64)vf_man << (lz + 1)) >> (f64_exp_size + 1);
             } else {
+                /* Zero */
                 vp_exp = 0;
                 vp_man = 0;
             }
         }
         else if (vf_exp == 3) {
-            /* Inf/NaN */
+            /* inline Inf/NaN - set exponent then left-justify the mantissa,
+             * containing 0b0000 for infinity or 0b1000 for canonical NaN. */
             vp_exp = f64_exp_mask;
-            /* left-justify the mantissa */
             vp_man = (u64)vf_man << (f64_mant_size - 4);
         }
         else {
-            /* adjust exponent bias from 2-bit domain to IEEE 754 DP.
-             * bias in the 2-bit exponent is 1 and infinity is 3 */
+            /* inline normal - adjust exponent bias from 2-bit bias 1 to
+             * the IEEE 754 bias then left-justify the mantissa. */
             vp_exp = f64_exp_bias + vf_exp - 1;
-            /* left-justify the mantissa */
             vp_man = (u64)vf_man << (f64_mant_size - 4);
         }
     }
+    /* out-of-line little-endian exponent and mantissa */
     else {
         size_t lz = clz(vr_man);
         if (vr_exp <= -(s64)f64_exp_bias) {
+            /* normal to subnormal - calculate shift using exponent delta
+             * then left-justify the mantissa preserving the leading 1. */
             assert(vr_exp >= -(s64)f64_exp_bias - f64_mant_size);
-            /* convert normal to subnormal shift using the exponent delta  */
             size_t sh = f64_exp_bias + vr_exp + lz - f64_exp_size;
             vp_exp = 0;
-            /* left-justify the mantissa preserving the leading 1 */
             vp_man = (u64)vr_man << sh;
         } else {
-            /* if the exponent is not present, the mantissa holds an integer
-             * so we calculate the exponent based on the leading zero count */
+            /* normal - if no exponent, mantissa is an integer so calculate
+             * exponent from the leading zero count otherwise copy exponent
+             * then left-justify the mantissa and truncate the leading 1. */
             vp_exp = f64_exp_bias + (vf_exp == 0 ? 63 - lz : vr_exp);
-            /* left-justify the mantissa and truncate the leading 1 */
             vp_man = (u64)vr_man << (lz + 1) >> (f64_exp_size + 1);
         }
     }
@@ -1382,49 +1384,51 @@ f64_result vf8_f64_read_byval(vf8_buf *buf)
         }
     }
 
+    /* inline exponent and mantissa using float7 */
     if (vf_inl) {
         if (vf_exp == 0) {
-            /* normalize inline subnormal */
             if (vf_man > 0) {
                 size_t lz = clz((u64)vf_man);
-                /* calculate the exponent based on the leading zero count
-                 * with 4 digits right of the point hence 59 = (63 - 4) */
+                /* inline subnormal - normalize by calculating exponent
+                 * based on the leading zero count for the 4 bits right
+                 * of the point hence 59 = (63 - 4) then left-justify
+                 * the mantissa and truncate the leading 1. */
                 vp_exp = f64_exp_bias + 59 - lz;
-                /* left-justify the mantissa and truncate the leading 1 */
                 vp_man = ((u64)vf_man << (lz + 1)) >> (f64_exp_size + 1);
             } else {
+                /* Zero */
                 vp_exp = 0;
                 vp_man = 0;
             }
         }
         else if (vf_exp == 3) {
-            /* Inf/NaN */
+            /* inline Inf/NaN - set exponent then left-justify the mantissa,
+             * containing 0b0000 for infinity or 0b1000 for canonical NaN. */
             vp_exp = f64_exp_mask;
-            /* left-justify the mantissa */
             vp_man = (u64)vf_man << (f64_mant_size - 4);
         }
         else {
-            /* adjust exponent bias from 2-bit domain to IEEE 754 DP.
-             * bias in the 2-bit exponent is 1 and infinity is 3 */
+            /* inline normal - adjust exponent bias from 2-bit bias 1 to
+             * the IEEE 754 bias then left-justify the mantissa. */
             vp_exp = f64_exp_bias + vf_exp - 1;
-            /* left-justify the mantissa */
             vp_man = (u64)vf_man << (f64_mant_size - 4);
         }
     }
+    /* out-of-line little-endian exponent and mantissa */
     else {
         size_t lz = clz(vr_man);
         if (vr_exp <= -(s64)f64_exp_bias) {
+            /* normal to subnormal - calculate shift using exponent delta
+             * then left-justify the mantissa preserving the leading 1. */
             assert(vr_exp >= -(s64)f64_exp_bias - f64_mant_size);
-            /* convert normal to subnormal shift using the exponent delta  */
             size_t sh = f64_exp_bias + vr_exp + lz - f64_exp_size;
             vp_exp = 0;
-            /* left-justify the mantissa preserving the leading 1 */
             vp_man = (u64)vr_man << sh;
         } else {
-            /* if the exponent is not present, the mantissa holds an integer
-             * so we calculate the exponent based on the leading zero count */
+            /* normal - if no exponent, mantissa is an integer so calculate
+             * exponent from the leading zero count otherwise copy exponent
+             * then left-justify the mantissa and truncate the leading 1. */
             vp_exp = f64_exp_bias + (vf_exp == 0 ? 63 - lz : vr_exp);
-            /* left-justify the mantissa and truncate the leading 1 */
             vp_man = (u64)vr_man << (lz + 1) >> (f64_exp_size + 1);
         }
     }
