@@ -89,6 +89,21 @@ Sufficiently small values can be encoded completely within the header byte:
 
 The inline values use the _float7_ format documented earlier.
 
+#### infinity
+
+_Infinity_ is encoded using exponent value of 3 and the mantissa set to zero:
+- `inline = 1`
+- `exponent = 0b11`
+- `mantissa = 0b0000`
+
+#### not-a-number
+
+_Not-a-Number_ is encoded using exponent value of 3 and the most significant
+bit of the mantissa set:
+- `inline = 1`
+- `exponent = 0b11`
+- `mantissa = 0b1000`
+
 ### normal floating point values
 
 Values that cannot be inlined store their exponent and mantissa length in
