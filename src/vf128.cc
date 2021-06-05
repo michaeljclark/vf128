@@ -1254,7 +1254,7 @@ static void _vf8_debug_pack(double v, u8 pre, s64 vp_exp, u64 vp_man, s64 vd_exp
 int vf8_f64_read(vf8_buf *buf, double *value)
 {
     s8 pre;
-	double v = 0;
+    double v = 0;
     bool vf_inl;
     bool vf_sgn;
     int vf_exp;
@@ -1430,7 +1430,7 @@ int vf8_f64_write(vf8_buf *buf, const double *value)
 {
     s8 pre;
     double v = *value;
-	vf8_f64_data d = vf8_f64_data_get(v);
+    vf8_f64_data d = vf8_f64_data_get(v);
     int vf_exp = 0;
     int vf_man = 0;
     u64 vw_man = 0;
