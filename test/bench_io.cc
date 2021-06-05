@@ -604,7 +604,9 @@ static void run_benchmark(size_t n, llong repeat, llong count, llong pause_ms)
     double min_t = 0., max_t = 0., sum_t = 0.;
     const char* name = "";
     if (repeat > 0) {
-        print_header("       ");
+        char num[32];
+        snprintf(num, sizeof(num), "  [%2zu] ", n);
+        print_header(num);
         print_rules("       ");
     }
     for (llong i = 0; i < llabs(repeat); i++) {
@@ -626,7 +628,9 @@ static void run_benchmark(size_t n, llong repeat, llong count, llong pause_ms)
         print_result(" best: ", name, count, min_t);
         puts("");
     } else if (llabs(repeat) >= 1) {
-        print_result("", name, count, min_t);
+        char num[32];
+        snprintf(num, sizeof(num), "[%2zu] ", n);
+        print_result(num, name, count, min_t);
     }
 }
 
@@ -651,8 +655,8 @@ int main(int argc, char **argv)
         pause_ms = atoll(argv[4]);
     }
     if (repeat < 0) {
-        print_header("");
-        print_rules("");
+        print_header("     ");
+        print_rules("     ");
     }
     if (bench_num == -1) {
         for (llong n = 0; n < array_size(benchmarks); n++) {
