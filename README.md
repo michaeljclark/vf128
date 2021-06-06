@@ -4,13 +4,13 @@ _vf128_ is a variable length floating-point data format that succinctly
 stores IEEE 754 floating-point values with up-to 120-bit mantissa and 24-bit
 exponent, covering all floating-point types from `binary16` to `binary128`.
 
-The _vf128_ format has the following properties that provide for:
+The _vf128_ variable length floating-point format provides:
 
-- compact variable length storage of floating-point values.
-- exponent and mantissa encoded with leading zeros omitted.
-- integers encoded with a mantissa and without an exponent.
-- powers of two encoded with an exponent and without a mantissa.
-- small floating point values that can be inlined within the header:
+- compact variable length storage of IEEE 754 floating-point values.
+- mantissa encoding that supports quantization on 8-bit boundaries.
+- succinct integer encoding with only a mantissa omitting the exponent.
+- succinct power-of-two encoding with only an exponent omitting the mantissa.
+- small floating point values inlined within the header:
   - -0.5 to 0.5 step 0.0625, -3.875 to 3.875 step 0.125,
     ±Zero, ±Inf, and ±NaN.
 
