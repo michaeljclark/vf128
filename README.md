@@ -33,7 +33,7 @@ fields. The presence of the _out-of-line_ exponent and mantissa following
 the header is indicated by the inline bit being clear and header exponent
 and mantissa fields being non-zero.
 
-| exponent-data (optional)         | mantissa-data (optional)         |
+| exponent-payload (optional)      | mantissa-payload (optional)      |
 |:---------------------------------|:---------------------------------|
 | (0-3) x 8-bit packed exponent    | (0-15) x 8-bit packed mantissa   |
 
@@ -41,10 +41,10 @@ The exponent payload is an unbiased little-endian two's complement signed
 integer. The exponent payload contains the equivalent of the IEEE 754
 exponent less the bias, so unpacking the exponent requires one addition.
 
-The mantissa payload is a little-endian unsigned integer with explicit
-leading 1 added, and right-shifted so there are no trailing zeros. The
-point is to the right of the leading one thus the exponent is the same
-as the normalized IEEE 754 exponent.
+The mantissa payload is a little-endian integer with explicit leading
+one, right-shifted so there are no trailing zeros. The point is to the
+right of the leading one thus the exponent is the same as the normalized
+IEEE 754 exponent.
 
 ![example vf128 encoding for -15.5](doc/vf128-example-1.svg)
 
@@ -68,8 +68,8 @@ The following values can inlined:
 
 The 2-bit exponent has a bias of 1, a subnormal value of 0 and an infinity
 value of 3. The rules for handling subnormals, infinity and not-a-number
-are consistent with IEEE 754. The mantissa has an implied leading 1 bit,
-except for the subnormal exponent value which has an implied leading 0 bit.
+are consistent with IEEE 754. The mantissa has an implied leading one bit,
+except for the subnormal exponent value which has an implied leading zero.
 The rules are consistent with IEEE 754 graceful underflow. There are two
 distinct exponent values and the minimum exponent is equal to _-(bias+1)_.
 
@@ -114,7 +114,7 @@ two's complement signed integer, encoded in as many bytes that are needed
 to fit the exponent value and its leading sign bit.
 
 The mantissa is stored following the exponent as a little-endian unsigned
-integer with explicit leading 1 added, and trailing zeros removed so that
+integer with explicit leading one added, and trailing zeros removed so that
 it can be stored in the minimum number of bytes.
 
 - `inline = 0`
