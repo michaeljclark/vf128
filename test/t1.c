@@ -44,13 +44,6 @@ void test_vf64(double f)
 
 void test_vf64_loop()
 {
-    for (double i = -3.875; i <= 3.875; i += (i < -0.5 || i >= 0.5) ? 0.125 : 0.0625) {
-        test_vf64(i);
-    }
-}
-
-void test_vf64_adhoc()
-{
     test_vf64(pi_f64);
     test_vf64(_f64_inf());
     test_vf64(_f64_nan());
@@ -58,6 +51,13 @@ void test_vf64_adhoc()
     test_vf64(-_f64_inf());
     test_vf64(-_f64_nan());
     test_vf64(-_f64_snan());
+    union { u64 u; f64 d; } subnormal1 = { 0x1ull };
+    union { u64 u; f64 d; } subnormal2 = { 0x1ull };
+    test_vf64(subnormal1.d);
+    test_vf64(subnormal2.d);
+    for (double i = -3.875; i <= 3.875; i += (i < -0.5 || i >= 0.5) ? 0.125 : 0.0625) {
+        test_vf64(i);
+    }
     for (double i = 1; i <= 16; i += 0.5) {
         test_vf64(i);
     }
@@ -70,10 +70,9 @@ void test_vf64_adhoc()
     for (int i = 1; i <= 10; i++) {
         test_vf64(1.0/(1 << i));
     }
-    union { u64 u; f64 d; } subnormal1 = { 0x1ull };
-    union { u64 u; f64 d; } subnormal2 = { 0x1ull };
-    test_vf64(subnormal1.d);
-    test_vf64(subnormal2.d);
+    for (double i = 0.001; i < 0.902; i += 0.050) {
+        test_vf64(i);
+    }
 }
 
 void test_vf32(float f)
@@ -91,13 +90,6 @@ void test_vf32(float f)
 
 void test_vf32_loop()
 {
-    for (float i = -3.875f; i <= 3.875f; i += (i < -0.5f || i >= 0.5f) ? 0.125f : 0.0625f) {
-        test_vf32(i);
-    }
-}
-
-void test_vf32_adhoc()
-{
     test_vf32(pi_f32);
     test_vf32(_f32_inf());
     test_vf32(_f32_nan());
@@ -105,6 +97,13 @@ void test_vf32_adhoc()
     test_vf32(-_f32_inf());
     test_vf32(-_f32_nan());
     test_vf32(-_f32_snan());
+    union { u32 u; f32 d; } subnormal1 = { 0x1ull };
+    union { u32 u; f32 d; } subnormal2 = { 0x1ull };
+    test_vf32(subnormal1.d);
+    test_vf32(subnormal2.d);
+    for (float i = -3.875f; i <= 3.875f; i += (i < -0.5f || i >= 0.5f) ? 0.125f : 0.0625f) {
+        test_vf32(i);
+    }
     for (float i = 1; i <= 16; i += 0.5f) {
         test_vf32(i);
     }
@@ -117,10 +116,9 @@ void test_vf32_adhoc()
     for (int i = 1; i <= 10; i++) {
         test_vf32(1.0f/(1 << i));
     }
-    union { u32 u; f32 d; } subnormal1 = { 0x1ull };
-    union { u32 u; f32 d; } subnormal2 = { 0x1ull };
-    test_vf32(subnormal1.d);
-    test_vf32(subnormal2.d);
+    for (float i = 0.001f; i < 0.902f; i += 0.050f) {
+        test_vf32(i);
+    }
 }
 
 void test_leb(u64 val)
@@ -199,9 +197,7 @@ int main(int argc, const char **argv)
 {
     test_ber_pi();
     test_vf64_loop();
-    test_vf64_adhoc();
     test_vf32_loop();
-    test_vf32_adhoc();
     test_leb_misc();
     test_vlu_misc();
     test_vluc_byval_misc();
