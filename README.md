@@ -8,8 +8,8 @@ The _vf128_ variable length floating-point format provides:
 
 - compact variable length storage of IEEE 754 floating-point values.
 - mantissa encoding that supports quantization on 8-bit boundaries.
-- succinct integer encoding with only a mantissa omitting the exponent.
-- succinct power-of-two encoding with only an exponent omitting the mantissa.
+- succinct normalized values with unary exponent (-0.99999.. to 0.99999..).
+- succinct power-of-two encoding with implicit mantissa.
 - small floating point values inlined within the header:
   - -0.5 to 0.5 step 0.0625, -3.875 to 3.875 step 0.125,
     ±Zero, ±Inf, and ±NaN.
@@ -141,10 +141,11 @@ to the explicit leading one. To decode, one simply detects values which have
 an exponent less than the minimum exponent of the type that is being decoded
 into, and shift the fraction accordingly.
 
-### integers
+### normalized values with unary exponent
 
-Integers are encoded with zero in the exponent field, and the integer length
-in the mantissa field. The integer bytes follow the header.
+Normal values in the range -0.99999.. to +0.99999.. with a binary exponent
+from e-1 to e-8 inclusive are encoded with zero in the exponent field, and the
+exponent is encoded as a unary prefix of trailing zeros in the mantissa field.
 
 - `inline = 0`
 - `exponent = 0`
@@ -152,8 +153,11 @@ in the mantissa field. The integer bytes follow the header.
 - `<mantissa-payload>`
 
 To decode, the leading zeros are counted to find a shift to left-justify
-the integer, truncate the explicit leading one and set the exponent based
-on the number of bits right of the leading one.
+the fraction, and trailing zeros are counted to find the exponent. The
+exponent is encoded as the negated trailing zeros count minus one.
+
+- most float32 values between -0.99999.. to 0.99999 fit in 4 bytes or less
+- most float64 values between -0.99999.. to 0.99999 fit in 8 bytes or less
 
 ### powers-of-two
 
