@@ -73,6 +73,7 @@ void test_vf64_loop()
     for (double i = 0.001; i < 0.902; i += 0.050) {
         test_vf64(i);
     }
+    test_vf64(0.000001);
 }
 
 void test_vf32(float f)
@@ -119,6 +120,7 @@ void test_vf32_loop()
     for (float i = 0.001f; i < 0.902f; i += 0.050f) {
         test_vf32(i);
     }
+    test_vf32(0.000001f);
 }
 
 void test_leb(u64 val)
