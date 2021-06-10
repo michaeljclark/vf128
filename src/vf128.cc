@@ -1314,7 +1314,7 @@ int vf_f64_read(vf_buf *buf, double *value)
     }
     /* out-of-line little-endian exponent and mantissa */
     else {
-        size_t lz = clz(vr_man);
+        size_t lz = clz(vr_man), tz = ctz(vr_man);
         if (vr_exp <= -(s64)f64_exp_bias) {
             /* normal to subnormal - calculate shift using exponent delta
              * then left-justify the mantissa preserving the leading 1. */
@@ -1323,11 +1323,20 @@ int vf_f64_read(vf_buf *buf, double *value)
             vp_exp = 0;
             vp_man = (u64)vr_man << sh;
         } else {
+#if 0
             /* normal - if no exponent, mantissa is an integer so calculate
              * exponent from the leading zero count otherwise copy exponent
              * then left-justify the mantissa and truncate the leading 1. */
             vp_exp = f64_exp_bias + (vf_exp == 0 ? 63 - lz : vr_exp);
             vp_man = (u64)vr_man << (lz + 1) >> (f64_exp_size + 1);
+#else
+            /* normal - if no exponent, mantissa is a fraction in the range
+             * +/-0.9900.. and we need ro retain the leading zero. */
+            //printf("lz=%zd tz=%zd vf_man=%d vr_man=0x%llx\n", lz, tz, vf_man, vr_man);
+            if (vf_exp == 0) vr_exp = -tz - 1;
+            vp_exp = f64_exp_bias + vr_exp;
+            vp_man = (u64)vr_man << (lz + 1) >> (f64_exp_size + 1);
+#endif
         }
     }
 
@@ -1416,7 +1425,7 @@ f64_result vf_f64_read_byval(vf_buf *buf)
     }
     /* out-of-line little-endian exponent and mantissa */
     else {
-        size_t lz = clz(vr_man);
+        size_t lz = clz(vr_man), tz = ctz(vr_man);
         if (vr_exp <= -(s64)f64_exp_bias) {
             /* normal to subnormal - calculate shift using exponent delta
              * then left-justify the mantissa preserving the leading 1. */
@@ -1425,11 +1434,20 @@ f64_result vf_f64_read_byval(vf_buf *buf)
             vp_exp = 0;
             vp_man = (u64)vr_man << sh;
         } else {
+#if 0
             /* normal - if no exponent, mantissa is an integer so calculate
              * exponent from the leading zero count otherwise copy exponent
              * then left-justify the mantissa and truncate the leading 1. */
             vp_exp = f64_exp_bias + (vf_exp == 0 ? 63 - lz : vr_exp);
             vp_man = (u64)vr_man << (lz + 1) >> (f64_exp_size + 1);
+#else
+            /* normal - if no exponent, mantissa is a fraction in the range
+             * +/-0.9900.. and we need ro retain the leading zero. */
+            //printf("lz=%zd tz=%zd vf_man=%d vr_man=0x%llx\n", lz, tz, vf_man, vr_man);
+            if (vf_exp == 0) vr_exp = -tz - 1;
+            vp_exp = f64_exp_bias + vr_exp;
+            vp_man = (u64)vr_man << (lz + 1) >> (f64_exp_size + 1);
+#endif
         }
     }
 
@@ -1474,6 +1492,7 @@ int vf_f64_write(vf_buf *buf, const double *value)
     }
     // Out-of-line
     else {
+        size_t tz = ctz(d.frac), lz = clz(d.frac);
         /*
          * 1. renormalize subnormal fraction (leading one preserved)
          * 2. omit fraction for powers of two (fraction is zero).
@@ -1481,27 +1500,58 @@ int vf_f64_write(vf_buf *buf, const double *value)
          * 4. otherwise encode both exponent and fraction
          */
         if (d.sexp == -(s64)f64_exp_bias) {
-            size_t sh = ctz(d.frac), lz = clz(d.frac);
-            vw_man = d.frac >> sh;
+            vw_man = d.frac >> tz;
             vw_exp = d.sexp - lz - 1;
             vf_exp = (u8)vf_le_ber_integer_s64_length_byval(vw_exp);
             vf_man = (u8)vf_le_ber_integer_u64_length_byval(vw_man);
             pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
         }
+#if 0
         else if (d.sexp >= 0 && d.sexp < 64 && d.frac > 0 && (d.frac << d.sexp) == 0) {
             size_t sh = 64 - d.sexp;
             vw_man = (d.frac >> sh) | (u64_msb >> (sh - 1));
             vf_man = (u8)vf_le_ber_integer_u64_length_byval(vw_man);
             pre = (d.sign << 6) | vf_man;
         }
+#endif
         else if (d.frac == 0) {
             vw_exp = d.sexp;
             vf_exp = (u8)vf_le_ber_integer_s64_length_byval(vw_exp);
             pre = (d.sign << 6) | (vf_exp << 4);
         }
+#if 1
+        else if (d.sexp < 0 && d.sexp >= -8 && ((d.frac >> -d.sexp) << -d.sexp) == d.frac) {
+            /*
+             * - compressing -0.99999.. - 0.99999.. excluding +/-0.
+             * - fixed point fraction with implied exponent of e0 relative
+             *   to the most significant bit in the encoded mantissa.
+             * - bit 7 of the left-most byte of the fraction is 0.5.
+             * - truncate trailing zeroes by a factor 8-bits because
+             *   payload length is used to recover the exponent.
+             * - compare/choose compressed or normal representation.
+             */
+            size_t sh = -d.sexp - 1;
+            u64 vw_man_a = (d.frac >> tz) | (u64_msb >> (tz - 1));
+            u64 vw_man_b = ((d.frac >> tz) << sh) | ((u64_msb >> (tz - 1)) << sh);
+            int vf_exp_a = (u8)vf_le_ber_integer_s64_length_byval(d.sexp);
+            int vf_man_a = (u8)vf_le_ber_integer_u64_length_byval(vw_man_a);
+            int vf_man_b = (u8)vf_le_ber_integer_u64_length_byval(vw_man_b);
+            if (vf_man_a + vf_exp_a < vf_man_b || sh > tz) {
+                vw_man = vw_man_a;
+                vw_exp = d.sexp;
+                vf_exp = vf_exp_a;
+                vf_man = vf_man_a;
+            } else {
+                //printf("frac=0x%016llx vw_man_a=0x%016llx vw_man_b=0x%016llx sh=%zu tz=%zu\n",
+                //    d.frac, vw_man_a, vw_man_b, sh, tz);
+                vw_man = vw_man_b;
+                vf_man = vf_man_b;
+            }
+            pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
+        }
+#endif
         else {
-            size_t sh = ctz(d.frac);
-            vw_man = (d.frac >> sh) | (u64_msb >> (sh - 1));
+            vw_man = (d.frac >> tz) | (u64_msb >> (tz - 1));
             vw_exp = d.sexp;
             vf_exp = (u8)vf_le_ber_integer_s64_length_byval(vw_exp);
             vf_man = (u8)vf_le_ber_integer_u64_length_byval(vw_man);
@@ -1562,6 +1612,7 @@ int vf_f64_write_byval(vf_buf *buf, const double value)
     }
     // Out-of-line
     else {
+        size_t tz = ctz(d.frac), lz = clz(d.frac);
         /*
          * 1. renormalize subnormal fraction (leading one preserved)
          * 2. omit fraction for powers of two (fraction is zero).
@@ -1569,27 +1620,58 @@ int vf_f64_write_byval(vf_buf *buf, const double value)
          * 4. otherwise encode both exponent and fraction
          */
         if (d.sexp == -(s64)f64_exp_bias) {
-            size_t sh = ctz(d.frac), lz = clz(d.frac);
-            vw_man = d.frac >> sh;
+            vw_man = d.frac >> tz;
             vw_exp = d.sexp - lz - 1;
             vf_exp = (u8)vf_le_ber_integer_s64_length_byval(vw_exp);
             vf_man = (u8)vf_le_ber_integer_u64_length_byval(vw_man);
             pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
         }
+#if 0
         else if (d.sexp >= 0 && d.sexp < 64 && d.frac > 0 && (d.frac << d.sexp) == 0) {
             size_t sh = 64 - d.sexp;
             vw_man = (d.frac >> sh) | (u64_msb >> (sh - 1));
             vf_man = (u8)vf_le_ber_integer_u64_length_byval(vw_man);
             pre = (d.sign << 6) | vf_man;
         }
+#endif
         else if (d.frac == 0) {
             vw_exp = d.sexp;
             vf_exp = (u8)vf_le_ber_integer_s64_length_byval(vw_exp);
             pre = (d.sign << 6) | (vf_exp << 4);
         }
+#if 1
+        else if (d.sexp < 0 && d.sexp >= -8 && ((d.frac >> -d.sexp) << -d.sexp) == d.frac) {
+            /*
+             * - compressing -0.99999.. - 0.99999.. excluding +/-0.
+             * - fixed point fraction with implied exponent of e0 relative
+             *   to the most significant bit in the encoded mantissa.
+             * - bit 7 of the left-most byte of the fraction is 0.5.
+             * - truncate trailing zeroes by a factor 8-bits because
+             *   payload length is used to recover the exponent.
+             * - compare/choose compressed or normal representation.
+             */
+            size_t sh = -d.sexp - 1;
+            u64 vw_man_a = (d.frac >> tz) | (u64_msb >> (tz - 1));
+            u64 vw_man_b = ((d.frac >> tz) << sh) | ((u64_msb >> (tz - 1)) << sh);
+            int vf_exp_a = (u8)vf_le_ber_integer_s64_length_byval(d.sexp);
+            int vf_man_a = (u8)vf_le_ber_integer_u64_length_byval(vw_man_a);
+            int vf_man_b = (u8)vf_le_ber_integer_u64_length_byval(vw_man_b);
+            if (vf_man_a + vf_exp_a < vf_man_b || sh > tz) {
+                vw_man = vw_man_a;
+                vw_exp = d.sexp;
+                vf_exp = vf_exp_a;
+                vf_man = vf_man_a;
+            } else {
+                //printf("frac=0x%016llx vw_man_a=0x%016llx vw_man_b=0x%016llx sh=%zu tz=%zu\n",
+                //    d.frac, vw_man_a, vw_man_b, sh, tz);
+                vw_man = vw_man_b;
+                vf_man = vf_man_b;
+            }
+            pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
+        }
+#endif
         else {
-            size_t sh = ctz(d.frac);
-            vw_man = (d.frac >> sh) | (u64_msb >> (sh - 1));
+            vw_man = (d.frac >> tz) | (u64_msb >> (tz - 1));
             vw_exp = d.sexp;
             vf_exp = (u8)vf_le_ber_integer_s64_length_byval(vw_exp);
             vf_man = (u8)vf_le_ber_integer_u64_length_byval(vw_man);
@@ -1748,7 +1830,7 @@ int vf_f32_read(vf_buf *buf, float *value)
     }
     /* out-of-line little-endian exponent and mantissa */
     else {
-        size_t lz = clz(vr_man);
+        size_t lz = clz(vr_man), tz = ctz(vr_man);
         if (vr_exp <= -(s32)f32_exp_bias) {
             /* normal to subnormal - calculate shift using exponent delta
              * then left-justify the mantissa preserving the leading 1. */
@@ -1757,11 +1839,20 @@ int vf_f32_read(vf_buf *buf, float *value)
             vp_exp = 0;
             vp_man = (u32)vr_man << sh;
         } else {
+#if 0
             /* normal - if no exponent, mantissa is an integer so calculate
              * exponent from the leading zero count otherwise copy exponent
              * then left-justify the mantissa and truncate the leading 1. */
             vp_exp = f32_exp_bias + (vf_exp == 0 ? 31 - (u32)lz : vr_exp);
             vp_man = (u32)vr_man << (lz + 1) >> (f32_exp_size + 1);
+#else
+            /* normal - if no exponent, mantissa is a fraction in the range
+             * +/-0.9900.. and we need ro retain the leading zero. */
+            //printf("lz=%zd tz=%zd vf_man=%d vr_man=0x%x\n", lz, tz, vf_man, vr_man);
+            if (vf_exp == 0) vr_exp = -(s32)tz - 1;
+            vp_exp = f32_exp_bias + vr_exp;
+            vp_man = (u32)vr_man << (lz + 1) >> (f32_exp_size + 1);
+#endif
         }
     }
 
@@ -1855,7 +1946,7 @@ f32_result vf_f32_read_byval(vf_buf *buf)
     }
     /* out-of-line little-endian exponent and mantissa */
     else {
-        size_t lz = clz(vr_man);
+        size_t lz = clz(vr_man), tz = ctz(vr_man);
         if (vr_exp <= -(s32)f32_exp_bias) {
             /* normal to subnormal - calculate shift using exponent delta
              * then left-justify the mantissa preserving the leading 1. */
@@ -1864,11 +1955,20 @@ f32_result vf_f32_read_byval(vf_buf *buf)
             vp_exp = 0;
             vp_man = (u32)vr_man << sh;
         } else {
+#if 0
             /* normal - if no exponent, mantissa is an integer so calculate
              * exponent from the leading zero count otherwise copy exponent
              * then left-justify the mantissa and truncate the leading 1. */
             vp_exp = f32_exp_bias + (vf_exp == 0 ? 31 - (u32)lz : vr_exp);
             vp_man = (u32)vr_man << (lz + 1) >> (f32_exp_size + 1);
+#else
+            /* normal - if no exponent, mantissa is a fraction in the range
+             * +/-0.9900.. and we need ro retain the leading zero. */
+            //printf("lz=%zd tz=%zd vf_man=%d vr_man=0x%x\n", lz, tz, vf_man, vr_man);
+            if (vf_exp == 0) vr_exp = -(s32)tz - 1;
+            vp_exp = f32_exp_bias + vr_exp;
+            vp_man = (u32)vr_man << (lz + 1) >> (f32_exp_size + 1);
+#endif
         }
     }
 
@@ -1913,6 +2013,7 @@ int vf_f32_write(vf_buf *buf, const float *value)
     }
     // Out-of-line
     else {
+        size_t tz = ctz(d.frac), lz = clz(d.frac);
         /*
          * 1. renormalize subnormal fraction (leading one preserved)
          * 2. omit fraction for powers of two (fraction is zero).
@@ -1920,27 +2021,58 @@ int vf_f32_write(vf_buf *buf, const float *value)
          * 4. otherwise encode both exponent and fraction
          */
         if (d.sexp == -(s32)f32_exp_bias) {
-            size_t sh = ctz(d.frac), lz = clz(d.frac);
-            vw_man = d.frac >> sh;
+            vw_man = d.frac >> tz;
             vw_exp = d.sexp - (u32)lz - 1;
             vf_exp = (u8)vf_le_ber_integer_s64_length_byval(vw_exp);
             vf_man = (u8)vf_le_ber_integer_u64_length_byval(vw_man);
             pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
         }
+#if 0
         else if (d.sexp >= 0 && d.sexp < 32 && d.frac > 0 && (d.frac << d.sexp) == 0) {
             size_t sh = 32 - d.sexp;
             vw_man = (d.frac >> sh) | (u32_msb >> (sh - 1));
             vf_man = (u8)vf_le_ber_integer_u64_length_byval(vw_man);
             pre = (d.sign << 6) | vf_man;
         }
+#endif
         else if (d.frac == 0) {
             vw_exp = d.sexp;
             vf_exp = (u8)vf_le_ber_integer_s64_length_byval(vw_exp);
             pre = (d.sign << 6) | (vf_exp << 4);
         }
+#if 1
+        else if (d.sexp < 0 && d.sexp >= -8 && ((d.frac >> -d.sexp) << -d.sexp) == d.frac) {
+            /*
+             * - compressing -0.99999.. - 0.99999.. excluding +/-0.
+             * - fixed point fraction with implied exponent of e0 relative
+             *   to the most significant bit in the encoded mantissa.
+             * - bit 7 of the left-most byte of the fraction is 0.5.
+             * - truncate trailing zeroes by a factor 8-bits because
+             *   payload length is used to recover the exponent.
+             * - compare/choose compressed or normal representation.
+             */
+            size_t sh = -d.sexp - 1;
+            u32 vw_man_a = (d.frac >> tz) | (u32_msb >> (tz - 1));
+            u32 vw_man_b = ((d.frac >> tz) << sh) | ((u32_msb >> (tz - 1)) << sh);
+            int vf_exp_a = (u8)vf_le_ber_integer_s64_length_byval(d.sexp);
+            int vf_man_a = (u8)vf_le_ber_integer_u64_length_byval(vw_man_a);
+            int vf_man_b = (u8)vf_le_ber_integer_u64_length_byval(vw_man_b);
+            if (vf_man_a + vf_exp_a < vf_man_b || sh > tz) {
+                vw_man = vw_man_a;
+                vw_exp = d.sexp;
+                vf_exp = vf_exp_a;
+                vf_man = vf_man_a;
+            } else {
+                //printf("frac=0x%016llx vw_man_a=0x%016llx vw_man_b=0x%016llx sh=%zu tz=%zu\n",
+                //    d.frac, vw_man_a, vw_man_b, sh, tz);
+                vw_man = vw_man_b;
+                vf_man = vf_man_b;
+            }
+            pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
+        }
+#endif
         else {
-            size_t sh = ctz(d.frac);
-            vw_man = (d.frac >> sh) | (u32_msb >> (sh - 1));
+            vw_man = (d.frac >> tz) | (u32_msb >> (tz - 1));
             vw_exp = d.sexp;
             vf_exp = (u8)vf_le_ber_integer_s64_length_byval(vw_exp);
             vf_man = (u8)vf_le_ber_integer_u64_length_byval(vw_man);
@@ -2001,6 +2133,7 @@ int vf_f32_write_byval(vf_buf *buf, const float value)
     }
     // Out-of-line
     else {
+        size_t tz = ctz(d.frac), lz = clz(d.frac);
         /*
          * 1. renormalize subnormal fraction (leading one preserved)
          * 2. omit fraction for powers of two (fraction is zero).
@@ -2008,27 +2141,58 @@ int vf_f32_write_byval(vf_buf *buf, const float value)
          * 4. otherwise encode both exponent and fraction
          */
         if (d.sexp == -(s32)f32_exp_bias) {
-            size_t sh = ctz(d.frac), lz = clz(d.frac);
-            vw_man = d.frac >> sh;
+            vw_man = d.frac >> tz;
             vw_exp = d.sexp - (u32)lz - 1;
             vf_exp = (u8)vf_le_ber_integer_s64_length_byval(vw_exp);
             vf_man = (u8)vf_le_ber_integer_u64_length_byval(vw_man);
             pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
         }
+#if 0
         else if (d.sexp >= 0 && d.sexp < 32 && d.frac > 0 && (d.frac << d.sexp) == 0) {
             size_t sh = 32 - d.sexp;
             vw_man = (d.frac >> sh) | (u32_msb >> (sh - 1));
             vf_man = (u8)vf_le_ber_integer_u64_length_byval(vw_man);
             pre = (d.sign << 6) | vf_man;
         }
+#endif
         else if (d.frac == 0) {
             vw_exp = d.sexp;
             vf_exp = (u8)vf_le_ber_integer_s64_length_byval(vw_exp);
             pre = (d.sign << 6) | (vf_exp << 4);
         }
+#if 1
+        else if (d.sexp < 0 && d.sexp >= -8 && ((d.frac >> -d.sexp) << -d.sexp) == d.frac) {
+            /*
+             * - compressing -0.99999.. - 0.99999.. excluding +/-0.
+             * - fixed point fraction with implied exponent of e0 relative
+             *   to the most significant bit in the encoded mantissa.
+             * - bit 7 of the left-most byte of the fraction is 0.5.
+             * - truncate trailing zeroes by a factor 8-bits because
+             *   payload length is used to recover the exponent.
+             * - compare/choose compressed or normal representation.
+             */
+            size_t sh = -d.sexp - 1;
+            u32 vw_man_a = (d.frac >> tz) | (u32_msb >> (tz - 1));
+            u32 vw_man_b = ((d.frac >> tz) << sh) | ((u32_msb >> (tz - 1)) << sh);
+            int vf_exp_a = (u8)vf_le_ber_integer_s64_length_byval(d.sexp);
+            int vf_man_a = (u8)vf_le_ber_integer_u64_length_byval(vw_man_a);
+            int vf_man_b = (u8)vf_le_ber_integer_u64_length_byval(vw_man_b);
+            if (vf_man_a + vf_exp_a < vf_man_b || sh > tz) {
+                vw_man = vw_man_a;
+                vw_exp = d.sexp;
+                vf_exp = vf_exp_a;
+                vf_man = vf_man_a;
+            } else {
+                //printf("frac=0x%016llx vw_man_a=0x%016llx vw_man_b=0x%016llx sh=%zu tz=%zu\n",
+                //    d.frac, vw_man_a, vw_man_b, sh, tz);
+                vw_man = vw_man_b;
+                vf_man = vf_man_b;
+            }
+            pre = (d.sign << 6) | (vf_exp << 4) | vf_man;
+        }
+#endif
         else {
-            size_t sh = ctz(d.frac);
-            vw_man = (d.frac >> sh) | (u32_msb >> (sh - 1));
+            vw_man = (d.frac >> tz) | (u32_msb >> (tz - 1));
             vw_exp = d.sexp;
             vf_exp = (u8)vf_le_ber_integer_s64_length_byval(vw_exp);
             vf_man = (u8)vf_le_ber_integer_u64_length_byval(vw_man);
