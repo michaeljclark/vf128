@@ -657,9 +657,6 @@ int vf_asn1_der_integer_s64_write_byval(vf_buf *buf, asn1_tag _tag, const s64 va
  * IEEE 754 encoding and decoding functions
  */
 
-union f32_bits { f32 f; u32 u; };
-union f64_bits { f64 f; u64 u; };
-
 struct f32_struct { u32 mant : 23; u32 exp : 8;  u32 sign : 1; };
 struct f64_struct { u64 mant : 52; u64 exp : 11; u64 sign : 1; };
 
