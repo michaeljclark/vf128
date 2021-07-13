@@ -413,6 +413,16 @@ int vf_f32_write(vf_buf *buf, const float *value);
 struct f32_result vf_f32_read_byval(vf_buf *buf);
 int vf_f32_write_byval(vf_buf *buf, const float value);
 
+int ieee754_f64_read(vf_buf *buf, double *value);
+int ieee754_f64_write(vf_buf *buf, const double *value);
+struct f64_result ieee754_f64_read_byval(vf_buf *buf);
+int ieee754_f64_write_byval(vf_buf *buf, const double value);
+
+int ieee754_f32_read(vf_buf *buf, float *value);
+int ieee754_f32_write(vf_buf *buf, const float *value);
+struct f32_result ieee754_f32_read_byval(vf_buf *buf);
+int ieee754_f32_write_byval(vf_buf *buf, const float value);
+
 int leb_u64_read(vf_buf *buf, u64 *value);
 int leb_u64_write(vf_buf *buf, const u64 *value);
 

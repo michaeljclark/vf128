@@ -2131,6 +2131,76 @@ int vf_f32_write_byval(vf_buf *buf, const float value)
 }
 
 /*
+ * IEEE 754
+ */
+
+int ieee754_f64_read(vf_buf *buf, double *value)
+{
+    if (vf_buf_read_i64(buf, (int64_t*)value) != sizeof(f64)) {
+        return -1;
+    }
+    return 0;
+}
+
+int ieee754_f64_write(vf_buf *buf, const double *value)
+{
+    if (vf_buf_write_i64(buf, (int64_t)f64_to_bits(*value)) != sizeof(f64)) {
+        return -1;
+    }
+    return 0;
+}
+
+struct f64_result ieee754_f64_read_byval(vf_buf *buf)
+{
+    f64 v;
+    if (vf_buf_read_i64(buf, (int64_t*)&v) != sizeof(f64)) {
+        return f64_result { 0, -1 };
+    }
+    return f64_result { v, 0 };
+}
+
+int ieee754_f64_write_byval(vf_buf *buf, const double value)
+{
+    if (vf_buf_write_i64(buf, (int64_t)f64_to_bits(value)) != sizeof(f64)) {
+        return -1;
+    }
+    return 0;
+}
+
+int ieee754_f32_read(vf_buf *buf, float *value)
+{
+    if (vf_buf_read_i32(buf, (int32_t*)value) != sizeof(f32)) {
+        return -1;
+    }
+    return 0;
+}
+
+int ieee754_f32_write(vf_buf *buf, const float *value)
+{
+    if (vf_buf_write_i32(buf, (int32_t)f32_to_bits(*value)) != sizeof(f32)) {
+        return -1;
+    }
+    return 0;
+}
+
+struct f32_result ieee754_f32_read_byval(vf_buf *buf)
+{
+    f32 v;
+    if (vf_buf_read_i32(buf, (int32_t*)&v) != sizeof(f32)) {
+        return f32_result { 0, -1 };
+    }
+    return f32_result { v, 0 };
+}
+
+int ieee754_f32_write_byval(vf_buf *buf, const float value)
+{
+    if (vf_buf_write_i32(buf, (int32_t)f32_to_bits(value)) != sizeof(f32)) {
+        return -1;
+    }
+    return 0;
+}
+
+/*
  * LEB128
  */
 

@@ -51,6 +51,8 @@ unsigned long long i12 = 18014398509481984;
 unsigned char i12_leb[] = { 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x20 };
 unsigned char i12_vlu[] = { 0x7F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40 };
 unsigned char pi_vf8[] = { 0x17, 0x01, 0xA3, 0x85, 0x88, 0x6A, 0x3F, 0x24, 0x03 };
+unsigned char pi_f64[] = { 0x18, 0x2d, 0x44, 0x54, 0xfb, 0x21, 0x09, 0x40 };
+unsigned char pi_f32[] = { 0xd8, 0x0f, 0x49, 0x40 };
 
 struct bench_result { const char *name; llong count; double t; llong size; };
 
@@ -368,6 +370,174 @@ static bench_result bench_vf32_write_byval_real(llong count)
 
     double t = (double)duration_cast<nanoseconds>(et - st).count();
     return bench_result { "f32-vf128-write-byval", count, t, 4 * count };
+}
+
+static bench_result bench_f64_read_byptr_real(llong count)
+{
+    double f;
+    vf_buf *buf = vf_buf_new(128);
+    vf_buf_write_bytes(buf, (const char*)pi_f64, sizeof(pi_f64));
+
+    auto st = high_resolution_clock::now();
+    for (llong i = 0; i < count; i++) {
+        vf_buf_reset(buf);
+        assert(!ieee754_f64_read(buf, &f));
+    }
+    auto et = high_resolution_clock::now();
+
+    assert(fabs(f - 3.141592) < 0.0001);
+    vf_buf_destroy(buf);
+
+    double t = (double)duration_cast<nanoseconds>(et - st).count();
+    return bench_result { "f64-ieee754-read-byptr", count, t, 8 * count };
+}
+
+static bench_result bench_f64_read_byval_real(llong count)
+{
+    f64_result r;
+    vf_buf *buf = vf_buf_new(128);
+    vf_buf_write_bytes(buf, (const char*)pi_f64, sizeof(pi_f64));
+
+    auto st = high_resolution_clock::now();
+    for (llong i = 0; i < count; i++) {
+        vf_buf_reset(buf);
+        r = ieee754_f64_read_byval(buf);
+        assert(!r.error);
+    }
+    auto et = high_resolution_clock::now();
+
+    assert(fabs(r.value - 3.141592) < 0.0001);
+    vf_buf_destroy(buf);
+
+    double t = (double)duration_cast<nanoseconds>(et - st).count();
+    return bench_result { "f64-ieee754-read-byval", count, t, 8 * count };
+}
+
+static bench_result bench_f64_write_byptr_real(llong count)
+{
+    double f = 3.141592653589793;
+    vf_buf *buf = vf_buf_new(128);
+
+    auto st = high_resolution_clock::now();
+    for (llong i = 0; i < count; i++) {
+        vf_buf_reset(buf);
+        assert(!ieee754_f64_write(buf, &f));
+    }
+    auto et = high_resolution_clock::now();
+
+    vf_buf_reset(buf);
+    ieee754_f64_read(buf, &f);
+    assert(fabs(f - 3.141592) < 0.0001);
+    vf_buf_destroy(buf);
+
+    double t = (double)duration_cast<nanoseconds>(et - st).count();
+    return bench_result { "f64-ieee754-write-byptr", count, t, 8 * count };
+}
+
+static bench_result bench_f64_write_byval_real(llong count)
+{
+    f64_result r;
+    double f = 3.141592653589793;
+    vf_buf *buf = vf_buf_new(128);
+
+    auto st = high_resolution_clock::now();
+    for (llong i = 0; i < count; i++) {
+        vf_buf_reset(buf);
+        assert(!ieee754_f64_write_byval(buf, f));
+    }
+    auto et = high_resolution_clock::now();
+
+    vf_buf_reset(buf);
+    r = ieee754_f64_read_byval(buf);
+    assert(fabs(r.value - 3.141592) < 0.0001);
+    vf_buf_destroy(buf);
+
+    double t = (double)duration_cast<nanoseconds>(et - st).count();
+    return bench_result { "f64-ieee754-write-byval", count, t, 8 * count };
+}
+
+static bench_result bench_f32_read_byptr_real(llong count)
+{
+    float f;
+    vf_buf *buf = vf_buf_new(128);
+    vf_buf_write_bytes(buf, (const char*)pi_f32, sizeof(pi_f32));
+
+    auto st = high_resolution_clock::now();
+    for (llong i = 0; i < count; i++) {
+        vf_buf_reset(buf);
+        assert(!ieee754_f32_read(buf, &f));
+    }
+    auto et = high_resolution_clock::now();
+
+    assert(fabs(f - 3.141592f) < 0.0001);
+    vf_buf_destroy(buf);
+
+    double t = (double)duration_cast<nanoseconds>(et - st).count();
+    return bench_result { "f32-ieee754-read-byptr", count, t, 4 * count };
+}
+
+static bench_result bench_f32_read_byval_real(llong count)
+{
+    f32_result r;
+    vf_buf *buf = vf_buf_new(128);
+    vf_buf_write_bytes(buf, (const char*)pi_f32, sizeof(pi_f32));
+
+    auto st = high_resolution_clock::now();
+    for (llong i = 0; i < count; i++) {
+        vf_buf_reset(buf);
+        r = ieee754_f32_read_byval(buf);
+        assert(!r.error);
+    }
+    auto et = high_resolution_clock::now();
+
+    assert(fabs(r.value - 3.141592f) < 0.0001);
+    vf_buf_destroy(buf);
+
+    double t = (double)duration_cast<nanoseconds>(et - st).count();
+    return bench_result { "f32-ieee754-read-byval", count, t, 4 * count };
+}
+
+static bench_result bench_f32_write_byptr_real(llong count)
+{
+    float f = 3.141592f;
+    vf_buf *buf = vf_buf_new(128);
+
+    auto st = high_resolution_clock::now();
+    for (llong i = 0; i < count; i++) {
+        vf_buf_reset(buf);
+        assert(!ieee754_f32_write(buf, &f));
+    }
+    auto et = high_resolution_clock::now();
+
+    vf_buf_reset(buf);
+    ieee754_f32_read(buf, &f);
+    assert(fabs(f - 3.141592f) < 0.0001);
+    vf_buf_destroy(buf);
+
+    double t = (double)duration_cast<nanoseconds>(et - st).count();
+    return bench_result { "f32-ieee754-write-byptr", count, t, 4 * count };
+}
+
+static bench_result bench_f32_write_byval_real(llong count)
+{
+    f32_result r;
+    float f = 3.141592f;
+    vf_buf *buf = vf_buf_new(128);
+
+    auto st = high_resolution_clock::now();
+    for (llong i = 0; i < count; i++) {
+        vf_buf_reset(buf);
+        assert(!ieee754_f32_write_byval(buf, f));
+    }
+    auto et = high_resolution_clock::now();
+
+    vf_buf_reset(buf);
+    r = ieee754_f32_read_byval(buf);
+    assert(fabs(r.value - 3.141592f) < 0.0001);
+    vf_buf_destroy(buf);
+
+    double t = (double)duration_cast<nanoseconds>(et - st).count();
+    return bench_result { "f32-ieee754-write-byval", count, t, 4 * count };
 }
 
 static bench_result bench_ascii_atoi(llong count)
@@ -731,6 +901,14 @@ static bench_result(* const benchmarks[])(llong) = {
     bench_vf64_read_byval_real,
     bench_vf64_write_byptr_real,
     bench_vf64_write_byval_real,
+    bench_f32_read_byptr_real,
+    bench_f32_read_byval_real,
+    bench_f32_write_byptr_real,
+    bench_f32_write_byval_real,
+    bench_f64_read_byptr_real,
+    bench_f64_read_byval_real,
+    bench_f64_write_byptr_real,
+    bench_f64_write_byval_real,
     bench_ascii_atoi,
     bench_ascii_atoll,
     bench_ascii_strtoull,
