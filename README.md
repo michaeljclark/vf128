@@ -16,12 +16,12 @@ The _vf128_ variable length floating-point format provides:
 
 ## format description
 
-The _vf128_ format is composed of a one byte header that stores the sign,
-an exponent length (0-3 bytes), and a mantissa length (0-15 bytes). An
-_inline bit_ provides the ability to encode small floating point values
-plus ±Zero, ±Inf, and ±NaN completely within the header byte itself.
-When the _inline bit_ is set, a floating-point value with 2-bit exponent
-and 4-bit mantissa is contained within the header byte.
+The _vf128_ format has a one byte header that contains a sign bit, a 2-bit
+exponent length (0-3 bytes), a 4-bit mantissa length (0-15 bytes) and an
+_inline bit_ that provides the ability to encode small floating point values
+plus ±Zero, ±Inf, and ±NaN completely within the header byte. When the
+_inline bit_ is set, a floating-point value with 2-bit exponent and 4-bit
+mantissa is contained within the header byte.
 
 | inline | sign   | exponent (len)  | mantissa (len)                  |
 |--------|--------|-----------------|---------------------------------|
