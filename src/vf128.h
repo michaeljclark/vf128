@@ -423,18 +423,6 @@ int ieee754_f32_write(vf_buf *buf, const float *value);
 struct f32_result ieee754_f32_read_byval(vf_buf *buf);
 int ieee754_f32_write_byval(vf_buf *buf, const float value);
 
-int leb_u64_read(vf_buf *buf, u64 *value);
-int leb_u64_write(vf_buf *buf, const u64 *value);
-
-struct u64_result leb_u64_read_byval(vf_buf *buf);
-int leb_u64_write_byval(vf_buf *buf, const u64 value);
-
-int vlu_u64_read(vf_buf *buf, u64 *value);
-int vlu_u64_write(vf_buf *buf, const u64 *value);
-
-struct u64_result vlu_u64_read_byval(vf_buf *buf);
-int vlu_u64_write_byval(vf_buf *buf, const u64 value);
-
 #ifdef __cplusplus
 }
 #endif
