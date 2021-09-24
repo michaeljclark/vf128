@@ -27,12 +27,12 @@ mantissa is contained within the header byte.
 |--------|--------|-----------------|---------------------------------|
 | 1-bit  | 1-bit  | 2-bits          | 4-bits                          |
 
-The header byte is optionally followed by little-endian exponent and
-mantissa fields with lengths indicated by the header exponent and mantissa
-fields. The presence of the _extern_ exponent and mantissa following
-the header is indicated by the extern bit set and header exponent and
-mantissa fields being non-zero. The extern bit set with header exponent and
-mantissa fields being zero is reserved for future use.
+The header byte is optionally followed by little-endian exponent and mantissa,
+with their lengths stored in the header exponent and mantissa length fields.
+The presence of an external exponent, mantissa, or both, is indicated by the
+extern bit being set and and at least one of the header exponent and mantissa
+length fields being non-zero. The extern bit set with the header exponent and
+mantissa length fields both set to zero is reserved for future use.
 
 | exponent-payload (optional)      | mantissa-payload (optional)      |
 |:---------------------------------|:---------------------------------|
