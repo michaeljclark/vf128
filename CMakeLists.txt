@@ -1,23 +1,10 @@
 cmake_minimum_required(VERSION 3.12)
 
-project(vf8)
+project(vf128)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-
-include(CheckCXXCompilerFlag)
-
-# We need haswell for TZCNT/LZCNT
-check_cxx_compiler_flag("-march=x86-64-v3" has_march_x86_64_v3 "int main() { return 0; }")
-check_cxx_compiler_flag("-march=haswell" has_march_haswell "int main() { return 0; }")
-if (has_march_x86_64_v3)
-	list(APPEND CMAKE_C_FLAGS -march=x86-64-v3)
-	list(APPEND CMAKE_CXX_FLAGS -march=x86-64-v3)
-elseif (has_march_haswell)
-	list(APPEND CMAKE_C_FLAGS -march=haswell)
-	list(APPEND CMAKE_CXX_FLAGS -march=haswell)
-endif()
 
 include_directories(src)
 
